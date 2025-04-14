@@ -138,16 +138,36 @@ REST_FRAMEWORK = {
 }
 
 # CORS Settings
+# settings.py
+
 CORS_ALLOWED_ORIGINS = [
     "http://localhost:4200",  # Angular default port
     "http://127.0.0.1:4200",
 ]
 
+CORS_ALLOW_METHODS = [
+    'GET',
+    'POST',
+    'OPTIONS',
+]
+
+CORS_ALLOW_HEADERS = [
+    'accept',
+    'accept-encoding',
+    'authorization',
+    'content-type',
+    'dnt',
+    'origin',
+    'user-agent',
+    'x-csrftoken',
+    'x-requested-with',
+]
+
 CORS_ALLOW_CREDENTIALS = True
 
 # DeepSeek API Configuration
-DEEPSEEK_API_KEY = os.getenv('DEEPSEEK_API_KEY')
-DEEPSEEK_API_URL = "https://api.deepseek.com/v1/chat/completions"
+# DEEPSEEK_API_KEY = os.getenv('DEEPSEEK_API_KEY')
+# DEEPSEEK_API_URL = "https://api.deepseek.com/v1/chat/completions"
 
 # Authentication settings
 AUTH_USER_MODEL = 'auth.User'
