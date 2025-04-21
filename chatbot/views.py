@@ -3,7 +3,7 @@ from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
 from rest_framework.permissions import AllowAny
 from .deepseek import enviar_prompt  
-from .images import obtener_fotos_lugar
+from .images import obtener_fotos_lugar_mejoradas
 import os
 from .models import Cities, Countries
 from .openweather import obtener_clima
@@ -92,7 +92,7 @@ def images_response(request):
         }, status=400)
 
     try:
-        imagenes = obtener_fotos_lugar(nombre_lugar, api_key)
+        imagenes = obtener_fotos_lugar_mejoradas(nombre_lugar, api_key)
         if imagenes:
             return Response({
                 'status': 'success',
