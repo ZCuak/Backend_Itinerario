@@ -1,7 +1,7 @@
 # deepseek.py
 import requests
 
-API_KEY = "sk-e5fa943a87eb4382b80a2e694ac300d5"
+API_KEY = "sk-2ce16076392141bf9f3e0b4a0524920c"
 API_URL = "https://api.deepseek.com/v1/chat/completions"
 
 def enviar_prompt(prompt_usuario):
