@@ -4,7 +4,7 @@ from rest_framework.response import Response
 from rest_framework.permissions import AllowAny
 from .deepseek import enviar_prompt  
 from .images import obtener_fotos_lugar
-
+import os
 @api_view(['GET'])
 @permission_classes([AllowAny])
 def connection_test(request):
@@ -45,7 +45,7 @@ def deepseek_response(request):
 @permission_classes([AllowAny])
 def images_response(request):
     nombre_lugar = request.data.get("nombre_lugar", "")
-    api_key = 'AIzaSyDWFyOlDVNw2A8Q9s07cCPMnAOA139egf0'  # Puedes moverla a settings si quieres mantenerlo más seguro
+    api_key = os.getenv('API_KEY_IMAGE_GENERATION')
 
     if not nombre_lugar:
         return Response({
