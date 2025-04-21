@@ -1,9 +1,7 @@
-
-
-# openai_chat.py
+import os
 import requests
 
-API_KEY = ""
+API_KEY = os.getenv("API_KEY_OPENAI")
 API_URL = "https://api.openai.com/v1/chat/completions"
 
 def enviar_prompt(prompt_usuario):
