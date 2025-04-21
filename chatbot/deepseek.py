@@ -11,7 +11,7 @@ def enviar_prompt(prompt_usuario):
     }
 
     data = {
-        "model": "gpt-3.5-turbo",  # Puedes usar "gpt-3.5-turbo" si quieres ahorrar
+        "model": "deepseek-chat",
         "messages": [{"role": "user", "content": prompt_usuario}],
         "temperature": 0.7
     }
