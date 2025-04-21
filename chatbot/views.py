@@ -3,7 +3,8 @@ from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
 from rest_framework.permissions import AllowAny
 from .deepseek import enviar_prompt  
-
+from .images import obtener_fotos_lugar
+import os
 from .models import Cities, Countries
 from .openweather import obtener_clima
 
@@ -40,6 +41,74 @@ def deepseek_response(request):
         return Response({
             'status': 'error',
             'message': 'Error al generar respuesta desde DeepSeek.',
+            'data': None
+        }, status=500)
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def images_response(request):
+    nombre_lugar = request.data.get("nombre_lugar", "")
+    api_key = os.getenv('API_KEY_IMAGE_GENERATION')
+
+    if not nombre_lugar:
+        return Response({
+            'status': 'error',
+            'message': 'El campo "nombre_lugar" es obligatorio.',
+            'data': None
+        }, status=400)
+
+    try:
+        imagenes = obtener_fotos_lugar(nombre_lugar, api_key)
+        if imagenes:
+            return Response({
+                'status': 'success',
+                'message': f'Se encontraron {len(imagenes)} imágenes.',
+                'data': imagenes
+            })
+        else:
+            return Response({
+                'status': 'error',
+                'message': 'No se encontraron imágenes para ese lugar.',
+                'data': []
+            })
+    except Exception as e:
+        return Response({
+            'status': 'error',
+            'message': f'Error al obtener imágenes: {str(e)}',
+            'data': None
+        }, status=500)
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def images_response(request):
+    nombre_lugar = request.data.get("nombre_lugar", "")
+    api_key = os.getenv('API_KEY_IMAGE_GENERATION')
+
+    if not nombre_lugar:
+        return Response({
+            'status': 'error',
+            'message': 'El campo "nombre_lugar" es obligatorio.',
+            'data': None
+        }, status=400)
+
+    try:
+        imagenes = obtener_fotos_lugar(nombre_lugar, api_key)
+        if imagenes:
+            return Response({
+                'status': 'success',
+                'message': f'Se encontraron {len(imagenes)} imágenes.',
+                'data': imagenes
+            })
+        else:
+            return Response({
+                'status': 'error',
+                'message': 'No se encontraron imágenes para ese lugar.',
+                'data': []
+            })
+    except Exception as e:
+        return Response({
+            'status': 'error',
+            'message': f'Error al obtener imágenes: {str(e)}',
             'data': None
         }, status=500)
 
