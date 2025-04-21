@@ -1,8 +1,8 @@
-# deepseek.py
+import os
 import requests
 
-API_KEY = "sk-2ce16076392141bf9f3e0b4a0524920c"
-API_URL = "https://api.deepseek.com/v1/chat/completions"
+API_KEY = os.getenv("API_KEY_OPENAI")
+API_URL = "https://api.openai.com/v1/chat/completions"
 
 def enviar_prompt(prompt_usuario):
     headers = {
