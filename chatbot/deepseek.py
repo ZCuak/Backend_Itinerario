@@ -1,8 +1,10 @@
-# deepseek.py
+
+
+# openai_chat.py
 import requests
 
-API_KEY = "sk-2ce16076392141bf9f3e0b4a0524920c"
-API_URL = "https://api.deepseek.com/v1/chat/completions"
+API_KEY = ""
+API_URL = "https://api.openai.com/v1/chat/completions"
 
 def enviar_prompt(prompt_usuario):
     headers = {
@@ -11,7 +13,7 @@ def enviar_prompt(prompt_usuario):
     }
 
     data = {
-        "model": "deepseek-chat",
+        "model": "gpt-4-turbo",  # Puedes usar "gpt-3.5-turbo" si quieres ahorrar
         "messages": [{"role": "user", "content": prompt_usuario}],
         "temperature": 0.7
     }

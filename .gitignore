@@ -1,0 +1,20 @@
+# Excluir carpetas __pycache__ y archivos .pyc
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Excluir entornos virtuales (opcional)
+.venv/
+venv/
+env/
+.env/
+
+# Excluir archivos de configuración sensible (opcional)
+*.env
+.enviroment
+.entornovirtual
+*.secret
+
+# Excluir directorios de IDE (opcional)
+.idea/
+.vscode/
