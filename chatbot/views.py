@@ -4,6 +4,9 @@ from rest_framework.response import Response
 from rest_framework.permissions import AllowAny
 from .deepseek import enviar_prompt  
 
+from .models import Cities, Countries
+from .openweather import obtener_clima
+
 @api_view(['GET'])
 @permission_classes([AllowAny])
 def connection_test(request):
@@ -38,4 +41,49 @@ def deepseek_response(request):
             'status': 'error',
             'message': 'Error al generar respuesta desde DeepSeek.',
             'data': None
+        }, status=500)
+
+
+@api_view(['GET'])
+@permission_classes([AllowAny])
+def clima_actual(request):
+    ciudad = request.GET.get("ciudad", "").strip()
+    pais = request.GET.get("pais", "").strip()
+
+    if not ciudad or not pais:
+        return Response({
+            "status": "error",
+            "message": "Los parámetros 'ciudad' y 'pais' son obligatorios.",
+            "data": None
+        }, status=400)
+
+    try:
+        pais_obj = Countries.objects.get(name__iexact=pais)
+        ciudad_obj = Cities.objects.get(name__iexact=ciudad, country=pais_obj)
+    except Countries.DoesNotExist:
+        return Response({
+            "status": "error",
+            "message": f"El país '{pais}' no fue encontrado.",
+            "data": None
+        }, status=404)
+    except Cities.DoesNotExist:
+        return Response({
+            "status": "error",
+            "message": f"La ciudad '{ciudad}' no fue encontrada en el país '{pais}'.",
+            "data": None
+        }, status=404)
+
+    clima = obtener_clima(ciudad_obj.latitude, ciudad_obj.longitude)
+
+    if clima:
+        return Response({
+            "status": "success",
+            "message": f"Clima para {ciudad_obj.name}, {pais_obj.name}.",
+            "data": clima
+        })
+    else:
+        return Response({
+            "status": "error",
+            "message": "No se pudo obtener el clima.",
+            "data": None
         }, status=500)

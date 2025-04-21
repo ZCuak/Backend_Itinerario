@@ -39,3 +39,21 @@ class Pregunta(models.Model):
 
     def __str__(self):
         return f"Pregunta para {self.viaje.destino}"
+    
+
+class Countries(models.Model):
+    name = models.CharField(max_length=100)
+
+    class Meta:
+        managed = False
+
+class Cities(models.Model):
+    country = models.ForeignKey(Countries, on_delete=models.DO_NOTHING, db_column='country_id')
+    state_id = models.IntegerField()
+    name = models.CharField(max_length=100)
+    latitude = models.FloatField()
+    longitude = models.FloatField()
+
+    class Meta:
+        managed = False
+

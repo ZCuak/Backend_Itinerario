@@ -80,10 +80,18 @@ WSGI_APPLICATION = 'itinerario_backend.wsgi.application'
 
 DATABASES = {
     'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
+        'ENGINE': 'django.db.backends.mysql',
+        'NAME': 'odindeve_emprendimiento',
+        'USER': 'odindeve_emprendimiento',
+        'PASSWORD': 'odindeve_emprendimiento',
+        'HOST': '201.148.104.162',  # IP remota
+        'PORT': '3306',  # Puerto por defecto de MySQL
+        'OPTIONS': {
+            'init_command': "SET sql_mode='STRICT_TRANS_TABLES'",
+        },
     }
 }
+
 
 
 # Password validation
