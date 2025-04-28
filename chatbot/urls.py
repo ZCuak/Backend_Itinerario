@@ -1,5 +1,5 @@
 from django.urls import path
-from .views import connection_test, deepseek_response, images_response, clima_actual, listar_paises, listar_ciudades_por_pais
+from .views import connection_test, deepseek_response, images_response, clima_actual, listar_paises, listar_ciudades_por_pais, lugares_cercanos
 
 urlpatterns = [
     path('test/', connection_test, name='connection_test'),         
@@ -8,4 +8,5 @@ urlpatterns = [
     path('clima/', clima_actual, name='clima_actual'),  # nueva ruta
     path('paises/', listar_paises, name='listar_paises'),
     path('ciudades/', listar_ciudades_por_pais, name='listar_ciudades_por_pais'),
+    path('lugares-cercanos/', lugares_cercanos, name='lugares_cercanos'),
 ]

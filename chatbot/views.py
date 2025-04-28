@@ -8,6 +8,8 @@ import os
 from .models import Cities, Countries
 from .openweather import obtener_clima
 
+from .place_search import buscar_lugares_foursquare
+
 @api_view(['GET'])
 @permission_classes([AllowAny])
 def connection_test(request):
@@ -196,3 +198,31 @@ def listar_ciudades_por_pais(request):
             "message": f"El país '{pais_nombre}' no existe.",
             "data": None
         }, status=404)
+    
+
+@api_view(['GET'])
+@permission_classes([AllowAny])
+def lugares_cercanos(request):
+    lugar = request.GET.get("lugar", "").strip()
+
+    if not lugar:
+        return Response({
+            "status": "error",
+            "message": "El parámetro 'lugar' es obligatorio.",
+            "data": None
+        }, status=400)
+
+    lugares = buscar_lugares_foursquare(lugar)
+
+    if lugares is not None:
+        return Response({
+            "status": "success",
+            "message": f"Lugares cercanos encontrados para '{lugar}'.",
+            "data": lugares
+        })
+    else:
+        return Response({
+            "status": "error",
+            "message": "No se pudo obtener la información de lugares.",
+            "data": None
+        }, status=500)
