@@ -118,8 +118,8 @@ def images_response(request):
 @api_view(['GET'])
 @permission_classes([AllowAny])
 def clima_actual(request):
-    ciudad = request.GET.get("ciudad", "").strip()
-    pais = request.GET.get("pais", "").strip()
+    ciudad = request.data.get("ciudad", "").strip()
+    pais = request.data.get("pais", "").strip()
 
     if not ciudad or not pais:
         return Response({
