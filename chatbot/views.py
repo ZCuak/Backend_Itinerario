@@ -118,8 +118,8 @@ def images_response(request):
 @api_view(['GET'])
 @permission_classes([AllowAny])
 def clima_actual(request):
-    ciudad = request.data.get("ciudad", "").strip()
-    pais = request.data.get("pais", "").strip()
+    ciudad = request.GET.get("ciudad", "").strip()
+    pais = request.GET.get("pais", "").strip()
 
     if not ciudad or not pais:
         return Response({
@@ -129,33 +129,47 @@ def clima_actual(request):
         }, status=400)
 
     try:
-        pais_obj = Countries.objects.get(name__iexact=pais)
-        ciudad_obj = Cities.objects.get(name__iexact=ciudad, country=pais_obj)
-    except Countries.DoesNotExist:
-        return Response({
-            "status": "error",
-            "message": f"El país '{pais}' no fue encontrado.",
-            "data": None
-        }, status=404)
-    except Cities.DoesNotExist:
-        return Response({
-            "status": "error",
-            "message": f"La ciudad '{ciudad}' no fue encontrada en el país '{pais}'.",
-            "data": None
-        }, status=404)
+        # Buscar país usando LIKE
+        pais_obj = Countries.objects.filter(name__icontains=pais).first()
+        if not pais_obj:
+            return Response({
+                "status": "error",
+                "message": f"No se encontró ningún país que coincida con '{pais}'.",
+                "data": None
+            }, status=404)
 
-    clima = obtener_clima(ciudad_obj.latitude, ciudad_obj.longitude)
+        # Buscar ciudad usando LIKE
+        ciudad_obj = Cities.objects.filter(
+            name__icontains=ciudad,
+            country=pais_obj
+        ).first()
+        
+        if not ciudad_obj:
+            return Response({
+                "status": "error",
+                "message": f"No se encontró ninguna ciudad que coincida con '{ciudad}' en el país '{pais_obj.name}'.",
+                "data": None
+            }, status=404)
 
-    if clima:
-        return Response({
-            "status": "success",
-            "message": f"Clima para {ciudad_obj.name}, {pais_obj.name}.",
-            "data": clima
-        })
-    else:
+        clima = obtener_clima(ciudad_obj.latitude, ciudad_obj.longitude)
+
+        if clima:
+            return Response({
+                "status": "success",
+                "message": f"Clima para {ciudad_obj.name}, {pais_obj.name}.",
+                "data": clima
+            })
+        else:
+            return Response({
+                "status": "error",
+                "message": "No se pudo obtener el clima.",
+                "data": None
+            }, status=500)
+            
+    except Exception as e:
         return Response({
             "status": "error",
-            "message": "No se pudo obtener el clima.",
+            "message": f"Error al procesar la solicitud: {str(e)}",
             "data": None
         }, status=500)
     

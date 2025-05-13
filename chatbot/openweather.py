@@ -35,28 +35,6 @@ def formatear_clima_para_ia(datos_clima):
     if not datos_clima:
         return None
     
-    # Procesar datos actuales
-    current = datos_clima.get('current', {})
-    weather_current = current.get('weather', [{}])[0]
-    icono_codigo = weather_current.get('icon', '')
-    
-    clima_actual = {
-        "temperatura": {
-            "actual": kelvin_a_celsius(current.get('temp', 0)),
-            "sensacion": kelvin_a_celsius(current.get('feels_like', 0))
-        },
-        "condiciones": {
-            "descripcion": weather_current.get('description', ''),
-            "icono": icono_codigo,
-            "estado": ICONOS_CLIMA.get(icono_codigo, "Desconocido")
-        },
-        "humedad": current.get('humidity', 0),
-        "viento": {
-            "velocidad": current.get('wind_speed', 0),
-            "direccion": current.get('wind_deg', 0)
-        }
-    }
-    
     # Procesar pronóstico diario
     pronostico = []
     for dia in datos_clima.get('daily', [])[:5]:  # Solo los próximos 5 días
@@ -68,18 +46,12 @@ def formatear_clima_para_ia(datos_clima):
                 "maxima": kelvin_a_celsius(dia.get('temp', {}).get('max', 0)),
                 "minima": kelvin_a_celsius(dia.get('temp', {}).get('min', 0))
             },
-            "condiciones": {
-                "descripcion": weather_dia.get('description', ''),
-                "icono": icono_codigo,
-                "estado": ICONOS_CLIMA.get(icono_codigo, "Desconocido")
-            },
+            "estado": ICONOS_CLIMA.get(icono_codigo, "Desconocido"),
+            "humedad": dia.get('humidity', 0),
             "probabilidad_lluvia": round(dia.get('pop', 0) * 100, 1)
         })
     
-    return {
-        "clima_actual": clima_actual,
-        "pronostico": pronostico
-    }
+    return pronostico
 
 def obtener_clima(lat, lon):
     params = {
