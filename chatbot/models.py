@@ -100,9 +100,15 @@ class Tipo_Lugar(models.Model):
         return self.nombre
 
 class Lugar(models.Model):
+    ESTADOS = [
+        ('pendiente', 'Pendiente'),
+        ('confirmado', 'Confirmado'),
+        ('cancelado', 'Cancelado')
+    ]
+    
     nombre = models.CharField(max_length=255)
     descripcion = models.TextField()
-    estado = models.BooleanField(default=True)
+    estado = models.CharField(max_length=20, choices=ESTADOS, default='pendiente')
     ubicacion = models.CharField(max_length=255)
     tipo_lugar = models.ForeignKey(Tipo_Lugar, on_delete=models.CASCADE)
 
@@ -173,11 +179,6 @@ class Itinerario(models.Model):
         return f"Itinerario {self.id} - {self.lugar}"
 
 class Actividad(models.Model):
-    TURNOS = [
-        ('manana', 'Mañana'),
-        ('tarde', 'Tarde'),
-        ('noche', 'Noche')
-    ]
     
     ESTADOS = [
         ('pendiente', 'Pendiente'),
@@ -185,7 +186,7 @@ class Actividad(models.Model):
         ('cancelada', 'Cancelada')
     ]
     
-    turno = models.CharField(max_length=10, choices=TURNOS)
+    turno = models.CharField(max_length=10)
     orden = models.IntegerField()
     estado = models.CharField(max_length=20, choices=ESTADOS, default='pendiente')
     itinerario = models.ForeignKey(Itinerario, on_delete=models.CASCADE)

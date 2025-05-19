@@ -5,8 +5,7 @@ from rest_framework.permissions import AllowAny
 from .deepseek import enviar_prompt  
 from .images import obtener_fotos_lugar_mejoradas
 import os
-from .models import Cities, Countries
-from .openweather import obtener_clima
+from .models import *
 
 from .place_search import buscar_lugares_foursquare
 
@@ -239,4 +238,247 @@ def lugares_cercanos(request):
             "status": "error",
             "message": "No se pudo obtener la información de lugares.",
             "data": None
+        }, status=500)
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def registrar_viaje(request):
+    try:
+        data = request.data
+        viaje = Viaje.objects.create(
+            presupuesto=data.get('presupuesto'),
+            dia_salida=data.get('dia_salida'),
+            ciudad_salida_id=data.get('ciudad_salida_id'),
+            duracion_viaje=data.get('duracion_viaje'),
+            estado=data.get('estado', 'pendiente')
+        )
+        return Response({
+            'status': 'success',
+            'message': 'Viaje registrado exitosamente',
+            'data': {
+                'id': viaje.id,
+                'presupuesto': viaje.presupuesto,
+                'dia_salida': viaje.dia_salida,
+                'ciudad_salida': viaje.ciudad_salida.name,
+                'duracion_viaje': viaje.duracion_viaje,
+                'estado': viaje.estado
+            }
+        })
+    except Exception as e:
+        return Response({
+            'status': 'error',
+            'message': f'Error al registrar el viaje: {str(e)}',
+            'data': None
+        }, status=400)
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def registrar_clima(request):
+    try:
+        data = request.data
+        clima = Clima.objects.create(
+            fecha=data.get('fecha'),
+            temperatura_actual=data.get('temperatura_actual'),
+            temperatura_sensacion=data.get('temperatura_sensacion'),
+            descripcion=data.get('descripcion'),
+            estado_clima=data.get('estado_clima'),
+            humedad=data.get('humedad'),
+            velocidad_viento=data.get('velocidad_viento'),
+            direccion_viento=data.get('direccion_viento'),
+            probabilidad_lluvia=data.get('probabilidad_lluvia')
+        )
+        return Response({
+            'status': 'success',
+            'message': 'Clima registrado exitosamente',
+            'data': {
+                'id': clima.id,
+                'fecha': clima.fecha,
+                'temperatura_actual': clima.temperatura_actual,
+                'estado_clima': clima.estado_clima
+            }
+        })
+    except Exception as e:
+        return Response({
+            'status': 'error',
+            'message': f'Error al registrar el clima: {str(e)}',
+            'data': None
+        }, status=400)
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def registrar_lugar(request):
+    try:
+        data = request.data
+        lugar = Lugar.objects.create(
+            nombre=data.get('nombre'),
+            descripcion=data.get('descripcion'),
+            ubicacion=data.get('ubicacion'),
+            tipo_lugar_id=data.get('tipo_lugar_id'),
+            estado=data.get('estado', 'pendiente')
+        )
+        return Response({
+            'status': 'success',
+            'message': 'Lugar registrado exitosamente',
+            'data': {
+                'id': lugar.id,
+                'nombre': lugar.nombre,
+                'ubicacion': lugar.ubicacion,
+                'tipo_lugar': lugar.tipo_lugar.nombre,
+                'estado': lugar.estado
+            }
+        })
+    except Exception as e:
+        return Response({
+            'status': 'error',
+            'message': f'Error al registrar el lugar: {str(e)}',
+            'data': None
+        }, status=400)
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def registrar_itinerario(request):
+    try:
+        data = request.data
+        itinerario = Itinerario.objects.create(
+            lugar=data.get('lugar'),
+            ciudad_id=data.get('ciudad_id'),
+            pais_id=data.get('pais_id'),
+            dia=data.get('dia'),
+            costo=data.get('costo'),
+            estado=data.get('estado', 'pendiente'),
+            viaje_id=data.get('viaje_id'),
+            clima_id=data.get('clima_id'),
+            transporte_id=data.get('transporte_id')
+        )
+        return Response({
+            'status': 'success',
+            'message': 'Itinerario registrado exitosamente',
+            'data': {
+                'id': itinerario.id,
+                'lugar': itinerario.lugar,
+                'ciudad': itinerario.ciudad.name,
+                'pais': itinerario.pais.name,
+                'dia': itinerario.dia,
+                'estado': itinerario.estado
+            }
+        })
+    except Exception as e:
+        return Response({
+            'status': 'error',
+            'message': f'Error al registrar el itinerario: {str(e)}',
+            'data': None
+        }, status=400)
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def registrar_actividad(request):
+    try:
+        data = request.data
+        actividad = Actividad.objects.create(
+            turno=data.get('turno'),
+            orden=data.get('orden'),
+            estado=data.get('estado', 'pendiente'),
+            itinerario_id=data.get('itinerario_id')
+        )
+        
+        # Registrar lugares asociados si se proporcionan
+        lugares_ids = data.get('lugares_ids', [])
+        if lugares_ids:
+            actividad.lugares.set(lugares_ids)
+        
+        return Response({
+            'status': 'success',
+            'message': 'Actividad registrada exitosamente',
+            'data': {
+                'id': actividad.id,
+                'turno': actividad.turno,
+                'orden': actividad.orden,
+                'estado': actividad.estado,
+                'itinerario_id': actividad.itinerario_id
+            }
+        })
+    except Exception as e:
+        return Response({
+            'status': 'error',
+            'message': f'Error al registrar la actividad: {str(e)}',
+            'data': None
+        }, status=400)
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def registrar_actividad_lugar(request):
+    try:
+        data = request.data
+        actividad_lugar = Actividad_Lugar.objects.create(
+            actividad_id=data.get('actividad_id'),
+            lugar_id=data.get('lugar_id')
+        )
+        return Response({
+            'status': 'success',
+            'message': 'Relación actividad-lugar registrada exitosamente',
+            'data': {
+                'id': actividad_lugar.id,
+                'actividad_id': actividad_lugar.actividad_id,
+                'lugar_id': actividad_lugar.lugar_id
+            }
+        })
+    except Exception as e:
+        return Response({
+            'status': 'error',
+            'message': f'Error al registrar la relación actividad-lugar: {str(e)}',
+            'data': None
+        }, status=400)
+
+@api_view(['GET'])
+@permission_classes([AllowAny])
+def obtener_ids_ciudad_pais(request):
+    ciudad_nombre = request.GET.get('ciudad', '').strip()
+    pais_nombre = request.GET.get('pais', '').strip()
+
+    if not ciudad_nombre or not pais_nombre:
+        return Response({
+            'status': 'error',
+            'message': 'Los parámetros "ciudad" y "pais" son obligatorios.',
+            'data': None
+        }, status=400)
+
+    try:
+        # Buscar el país
+        pais = Countries.objects.filter(name__icontains=pais_nombre).first()
+        if not pais:
+            return Response({
+                'status': 'error',
+                'message': f'No se encontró el país: {pais_nombre}',
+                'data': None
+            }, status=404)
+
+        # Buscar la ciudad en ese país
+        ciudad = Cities.objects.filter(
+            name__icontains=ciudad_nombre,
+            country=pais
+        ).first()
+
+        if not ciudad:
+            return Response({
+                'status': 'error',
+                'message': f'No se encontró la ciudad: {ciudad_nombre} en el país: {pais_nombre}',
+                'data': None
+            }, status=404)
+
+        return Response({
+            'status': 'success',
+            'message': 'IDs encontrados exitosamente',
+            'data': {
+                'ciudad_id': ciudad.id,
+                'pais_id': pais.id,
+                'ciudad_nombre': ciudad.name,
+                'pais_nombre': pais.name
+            }
+        })
+
+    except Exception as e:
+        return Response({
+            'status': 'error',
+            'message': f'Error al buscar los IDs: {str(e)}',
+            'data': None
         }, status=500)
