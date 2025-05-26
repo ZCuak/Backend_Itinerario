@@ -39,6 +39,7 @@ INSTALLED_APPS = [
     'rest_framework',
     'rest_framework_simplejwt',
     'corsheaders',
+    'rest_framework.authtoken',
     
     # Local apps
     'chatbot',
@@ -81,9 +82,9 @@ WSGI_APPLICATION = 'itinerario_backend.wsgi.application'
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.mysql',
-        'NAME': 'odindeve_emprendimiento',
-        'USER': 'odindeve_emprendimiento',
-        'PASSWORD': 'odindeve_emprendimiento',
+        'NAME': 'jjproyek_emprendimiento',
+        'USER': 'jjproyek_emprendimiento',
+        'PASSWORD': 'jjproyek_emprendimiento',
         'HOST': '201.148.104.162',  # IP remota
         'PORT': '3306',  # Puerto por defecto de MySQL
         'OPTIONS': {
@@ -137,9 +138,9 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 # REST Framework configuration
 REST_FRAMEWORK = {
-    'DEFAULT_AUTHENTICATION_CLASSES': (
-        'rest_framework_simplejwt.authentication.JWTAuthentication',
-    ),
+    'DEFAULT_AUTHENTICATION_CLASSES': [
+        'rest_framework.authentication.TokenAuthentication',
+    ],
     'DEFAULT_PERMISSION_CLASSES': [
         'rest_framework.permissions.IsAuthenticated',
     ],

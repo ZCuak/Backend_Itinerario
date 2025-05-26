@@ -1,11 +1,19 @@
 from django.shortcuts import render
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
-from rest_framework.permissions import AllowAny
+from rest_framework.permissions import AllowAny, IsAuthenticated
 from .deepseek import enviar_prompt  
 from .images import obtener_fotos_lugar_mejoradas
+from .openweather import obtener_clima
 import os
 from .models import *
+from django.contrib.auth.models import User
+from django.contrib.auth import authenticate, login, logout
+from rest_framework.authtoken.models import Token
+from django.db import IntegrityError
+from django.core.exceptions import ValidationError
+from django.contrib.auth.password_validation import validate_password
+from datetime import datetime
 
 from .place_search import buscar_lugares_foursquare
 
@@ -59,40 +67,6 @@ def images_response(request):
         }, status=400)
 
     try:
-        imagenes = obtener_fotos_lugar(nombre_lugar, api_key)
-        if imagenes:
-            return Response({
-                'status': 'success',
-                'message': f'Se encontraron {len(imagenes)} imágenes.',
-                'data': imagenes
-            })
-        else:
-            return Response({
-                'status': 'error',
-                'message': 'No se encontraron imágenes para ese lugar.',
-                'data': []
-            })
-    except Exception as e:
-        return Response({
-            'status': 'error',
-            'message': f'Error al obtener imágenes: {str(e)}',
-            'data': None
-        }, status=500)
-
-@api_view(['POST'])
-@permission_classes([AllowAny])
-def images_response(request):
-    nombre_lugar = request.data.get("nombre_lugar", "")
-    api_key = os.getenv('API_KEY_IMAGE_GENERATION')
-
-    if not nombre_lugar:
-        return Response({
-            'status': 'error',
-            'message': 'El campo "nombre_lugar" es obligatorio.',
-            'data': None
-        }, status=400)
-
-    try:
         imagenes = obtener_fotos_lugar_mejoradas(nombre_lugar, api_key)
         if imagenes:
             return Response({
@@ -112,7 +86,6 @@ def images_response(request):
             'message': f'Error al obtener imágenes: {str(e)}',
             'data': None
         }, status=500)
-
 
 @api_view(['GET'])
 @permission_classes([AllowAny])
@@ -150,13 +123,55 @@ def clima_actual(request):
                 "data": None
             }, status=404)
 
-        clima = obtener_clima(ciudad_obj.latitude, ciudad_obj.longitude)
+        # Buscar en la base de datos primero
+        climas_db = Clima.objects.filter(
+            ciudad=ciudad_obj,
+            pais=pais_obj,
+            fecha__gte=datetime.now().date()
+        ).order_by('fecha')[:3]  # Solo los primeros 3 días
 
-        if clima:
+        if climas_db.exists():
+            # Si encontramos datos en la base de datos, los devolvemos
+            datos_clima = []
+            for clima in climas_db:
+                datos_clima.append({
+                    "fecha": clima.fecha.strftime('%Y-%m-%d'),
+                    "temperatura": {
+                        "maxima": clima.temperatura_maxima,
+                        "minima": clima.temperatura_minima
+                    },
+                    "estado": clima.estado_clima,
+                    "humedad": clima.humedad,
+                    "probabilidad_lluvia": clima.probabilidad_lluvia
+                })
+            
             return Response({
                 "status": "success",
                 "message": f"Clima para {ciudad_obj.name}, {pais_obj.name}.",
-                "data": clima
+                "data": datos_clima
+            })
+
+        # Si no hay datos en la base de datos, consultamos la API
+        clima_api = obtener_clima(ciudad_obj.latitude, ciudad_obj.longitude)
+
+        if clima_api:
+            # Guardar solo los primeros 3 días en la base de datos
+            for dia_clima in clima_api[:3]:  # Solo los primeros 3 días
+                Clima.objects.create(
+                    fecha=datetime.strptime(dia_clima['fecha'], '%Y-%m-%d').date(),
+                    ciudad=ciudad_obj,
+                    pais=pais_obj,
+                    temperatura_maxima=dia_clima['temperatura']['maxima'],
+                    temperatura_minima=dia_clima['temperatura']['minima'],
+                    estado_clima=dia_clima['estado'],
+                    humedad=dia_clima['humedad'],
+                    probabilidad_lluvia=dia_clima['probabilidad_lluvia']
+                )
+
+            return Response({
+                "status": "success",
+                "message": f"Clima para {ciudad_obj.name}, {pais_obj.name}.",
+                "data": clima_api[:3]  # Devolver solo los primeros 3 días
             })
         else:
             return Response({
@@ -481,4 +496,327 @@ def obtener_ids_ciudad_pais(request):
             'status': 'error',
             'message': f'Error al buscar los IDs: {str(e)}',
             'data': None
+        }, status=500)
+
+@api_view(['GET'])
+@permission_classes([AllowAny])
+def obtener_itinerario_completo(request):
+    try:
+        # Obtener todos los itinerarios con sus relaciones
+        itinerarios = Itinerario.objects.select_related(
+            'ciudad', 'pais', 'viaje', 'clima', 'transporte'
+        ).prefetch_related(
+            'actividad_set__lugares'
+        ).all()
+
+        itinerarios_data = []
+        for itinerario in itinerarios:
+            actividades = []
+            for actividad in itinerario.actividad_set.all():
+                lugares_actividad = []
+                for lugar in actividad.lugares.all():
+                    lugares_actividad.append({
+                        'id': lugar.id,
+                        'nombre': lugar.nombre,
+                        'descripcion': lugar.descripcion,
+                        'ubicacion': lugar.ubicacion,
+                        'tipo_lugar': lugar.tipo_lugar.nombre
+                    })
+                
+                actividades.append({
+                    'id': actividad.id,
+                    'turno': actividad.turno,
+                    'orden': actividad.orden,
+                    'estado': actividad.estado,
+                    'lugares': lugares_actividad
+                })
+
+            itinerario_data = {
+                'id': itinerario.id,
+                'lugar': itinerario.lugar,
+                'ciudad': {
+                    'id': itinerario.ciudad.id,
+                    'nombre': itinerario.ciudad.name
+                },
+                'pais': {
+                    'id': itinerario.pais.id,
+                    'nombre': itinerario.pais.name
+                },
+                'dia': itinerario.dia,
+                'costo': float(itinerario.costo),
+                'estado': itinerario.estado,
+                'viaje': {
+                    'id': itinerario.viaje.id,
+                    'presupuesto': float(itinerario.viaje.presupuesto),
+                    'dia_salida': itinerario.viaje.dia_salida,
+                    'duracion_viaje': itinerario.viaje.duracion_viaje,
+                    'estado': itinerario.viaje.estado
+                },
+                'clima': {
+                    'id': itinerario.clima.id,
+                    'fecha': itinerario.clima.fecha,
+                    'temperatura_actual': itinerario.clima.temperatura_actual,
+                    'temperatura_sensacion': itinerario.clima.temperatura_sensacion,
+                    'descripcion': itinerario.clima.descripcion,
+                    'estado_clima': itinerario.clima.estado_clima,
+                    'humedad': itinerario.clima.humedad,
+                    'velocidad_viento': itinerario.clima.velocidad_viento,
+                    'direccion_viento': itinerario.clima.direccion_viento,
+                    'probabilidad_lluvia': itinerario.clima.probabilidad_lluvia
+                },
+                'transporte': {
+                    'id': itinerario.transporte.id,
+                    'nombre': itinerario.transporte.nombre,
+                    'tipo_transporte': itinerario.transporte.tipo_transporte.nombre
+                },
+                'actividades': actividades
+            }
+            itinerarios_data.append(itinerario_data)
+
+        return Response({
+            'status': 'success',
+            'message': 'Información de los itinerarios obtenida exitosamente',
+            'data': itinerarios_data
+        })
+
+    except Exception as e:
+        return Response({
+            'status': 'error',
+            'message': f'Error al obtener la información de los itinerarios: {str(e)}',
+            'data': None
+        }, status=500)
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def registro_usuario(request):
+    try:
+        data = request.data
+        username = data.get('username')
+        email = data.get('email')
+        password = data.get('password')
+        first_name = data.get('first_name', '')
+        last_name = data.get('last_name', '')
+
+        # Validar que los campos requeridos estén presentes
+        if not all([username, email, password]):
+            return Response({
+                'status': 'error',
+                'message': 'Todos los campos son obligatorios',
+                'data': None
+            }, status=400)
+
+        # Validar que el usuario no exista
+        if User.objects.filter(username=username).exists():
+            return Response({
+                'status': 'error',
+                'message': 'El nombre de usuario ya existe',
+                'data': None
+            }, status=400)
+
+        if User.objects.filter(email=email).exists():
+            return Response({
+                'status': 'error',
+                'message': 'El correo electrónico ya está registrado',
+                'data': None
+            }, status=400)
+
+        # Validar la contraseña
+        try:
+            validate_password(password)
+        except ValidationError as e:
+            return Response({
+                'status': 'error',
+                'message': 'La contraseña no cumple con los requisitos de seguridad',
+                'data': list(e.messages)
+            }, status=400)
+
+        # Crear el usuario
+        user = User.objects.create_user(
+            username=username,
+            email=email,
+            password=password,
+            first_name=first_name,
+            last_name=last_name
+        )
+
+        # Generar token de autenticación
+        token, _ = Token.objects.get_or_create(user=user)
+
+        return Response({
+            'status': 'success',
+            'message': 'Usuario registrado exitosamente',
+            'data': {
+                'user_id': user.id,
+                'username': user.username,
+                'email': user.email,
+                'first_name': user.first_name,
+                'last_name': user.last_name,
+                'token': token.key
+            }
+        })
+
+    except Exception as e:
+        return Response({
+            'status': 'error',
+            'message': f'Error al registrar el usuario: {str(e)}',
+            'data': None
+        }, status=500)
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def login_usuario(request):
+    try:
+        data = request.data
+        username = data.get('username')
+        password = data.get('password')
+
+        if not all([username, password]):
+            return Response({
+                'status': 'error',
+                'message': 'Usuario y contraseña son obligatorios',
+                'data': None
+            }, status=400)
+
+        # Autenticar usuario
+        user = authenticate(username=username, password=password)
+
+        if user is None:
+            return Response({
+                'status': 'error',
+                'message': 'Credenciales inválidas',
+                'data': None
+            }, status=401)
+
+        # Generar o obtener token
+        token, _ = Token.objects.get_or_create(user=user)
+
+        return Response({
+            'status': 'success',
+            'message': 'Login exitoso',
+            'data': {
+                'user_id': user.id,
+                'username': user.username,
+                'email': user.email,
+                'first_name': user.first_name,
+                'last_name': user.last_name,
+                'token': token.key
+            }
+        })
+
+    except Exception as e:
+        return Response({
+            'status': 'error',
+            'message': f'Error al iniciar sesión: {str(e)}',
+            'data': None
+        }, status=500)
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def logout_usuario(request):
+    try:
+        # Eliminar el token de autenticación
+        request.user.auth_token.delete()
+        
+        return Response({
+            'status': 'success',
+            'message': 'Sesión cerrada exitosamente',
+            'data': None
+        })
+
+    except Exception as e:
+        return Response({
+            'status': 'error',
+            'message': f'Error al cerrar sesión: {str(e)}',
+            'data': None
+        }, status=500)
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def obtener_perfil_usuario(request):
+    try:
+        user = request.user
+        return Response({
+            'status': 'success',
+            'message': 'Perfil obtenido exitosamente',
+            'data': {
+                'user_id': user.id,
+                'username': user.username,
+                'email': user.email,
+                'first_name': user.first_name,
+                'last_name': user.last_name
+            }
+        })
+
+    except Exception as e:
+        return Response({
+            'status': 'error',
+            'message': f'Error al obtener el perfil: {str(e)}',
+            'data': None
+        }, status=500)
+
+@api_view(['GET'])
+@permission_classes([AllowAny])
+def obtener_estado_por_ciudad(request):
+    ciudad_nombre = request.GET.get('ciudad', '').strip()
+    pais_nombre = request.GET.get('pais', '').strip()
+
+    if not ciudad_nombre or not pais_nombre:
+        return Response({
+            "status": "error",
+            "message": "Los parámetros 'ciudad' y 'pais' son obligatorios.",
+            "data": None
+        }, status=400)
+
+    try:
+        # Buscar el país
+        pais = Countries.objects.filter(name__icontains=pais_nombre).first()
+        if not pais:
+            return Response({
+                "status": "error",
+                "message": f"No se encontró el país: {pais_nombre}",
+                "data": None
+            }, status=404)
+
+        # Buscar la ciudad y su estado asociado
+        ciudad = Cities.objects.select_related('state').filter(
+            name__icontains=ciudad_nombre,
+            country=pais
+        ).first()
+
+        if not ciudad:
+            return Response({
+                "status": "error",
+                "message": f"No se encontró la ciudad: {ciudad_nombre} en el país: {pais_nombre}",
+                "data": None
+            }, status=404)
+
+        if not ciudad.state:
+            return Response({
+                "status": "error",
+                "message": f"No se encontró el estado para la ciudad: {ciudad_nombre}",
+                "data": None
+            }, status=404)
+
+        return Response({
+            "status": "success",
+            "message": "Estado encontrado exitosamente",
+            "data": {
+                "id": ciudad.state.id,
+                "nombre": ciudad.state.name,
+                "pais": {
+                    "id": pais.id,
+                    "nombre": pais.name
+                },
+                "ciudad": {
+                    "id": ciudad.id,
+                    "nombre": ciudad.name
+                }
+            }
+        })
+
+    except Exception as e:
+        return Response({
+            "status": "error",
+            "message": f"Error al buscar el estado: {str(e)}",
+            "data": None
         }, status=500)

@@ -120,20 +120,22 @@ class Lugar(models.Model):
 
 class Clima(models.Model):
     fecha = models.DateField()
-    temperatura_actual = models.FloatField()
-    temperatura_sensacion = models.FloatField()
-    descripcion = models.CharField(max_length=100)
+    ciudad = models.ForeignKey(Cities, on_delete=models.CASCADE, null=True, blank=True)
+    pais = models.ForeignKey(Countries, on_delete=models.CASCADE, null=True, blank=True)
+    temperatura_maxima = models.FloatField(null=True, blank=True)
+    temperatura_minima = models.FloatField(null=True, blank=True)
     estado_clima = models.CharField(max_length=50)
     humedad = models.IntegerField()
-    velocidad_viento = models.FloatField()
-    direccion_viento = models.IntegerField()
     probabilidad_lluvia = models.FloatField()
+    created_at = models.DateTimeField(auto_now_add=True, null=True, blank=True)
+    updated_at = models.DateTimeField(auto_now=True, null=True, blank=True)
     
     class Meta:
         db_table = 'clima'
+        unique_together = ('fecha', 'ciudad', 'pais')
 
     def __str__(self):
-        return f"Clima {self.fecha} - {self.estado_clima}"
+        return f"Clima {self.fecha} - {self.ciudad.name if self.ciudad else 'Sin ciudad'}, {self.pais.name if self.pais else 'Sin país'}"
 
 class Viaje(models.Model):
     ESTADOS = [
