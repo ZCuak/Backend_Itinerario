@@ -119,7 +119,7 @@ AUTH_PASSWORD_VALIDATORS = [
 
 LANGUAGE_CODE = 'es-es'  # Cambiado a español
 
-TIME_ZONE = 'America/Mexico_City'  # Ajusta según tu zona horaria
+TIME_ZONE = 'America/Lima'  # Zona horaria de Perú
 
 USE_I18N = True
 
@@ -157,6 +157,8 @@ CORS_ALLOWED_ORIGINS = [
 CORS_ALLOW_METHODS = [
     'GET',
     'POST',
+    'PUT',
+    'DELETE',
     'OPTIONS',
 ]
 
@@ -170,13 +172,14 @@ CORS_ALLOW_HEADERS = [
     'user-agent',
     'x-csrftoken',
     'x-requested-with',
+    'x-api-key',
 ]
 
 CORS_ALLOW_CREDENTIALS = True
 
-# DeepSeek API Configuration
-# DEEPSEEK_API_KEY = os.getenv('DEEPSEEK_API_KEY')
-# DEEPSEEK_API_URL = "https://api.deepseek.com/v1/chat/completions"
 
 # Authentication settings
 AUTH_USER_MODEL = 'auth.User'
+
+# Google Maps API Key
+GOOGLE_MAPS_API_KEY = os.getenv('GOOGLE_MAPS_API_KEY', '')

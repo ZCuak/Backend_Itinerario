@@ -201,57 +201,28 @@ def listar_paises(request):
 @api_view(['GET'])
 @permission_classes([AllowAny])
 def listar_ciudades_por_pais(request):
-    pais_nombre = request.GET.get('pais', '').strip()
-
-    if not pais_nombre:
+    pais_id = request.GET.get("pais_id")
+    
+    if not pais_id:
         return Response({
             "status": "error",
-            "message": "Debe proporcionar el nombre del país.",
+            "message": "El parámetro 'pais_id' es obligatorio.",
             "data": None
         }, status=400)
-
+    
     try:
-        pais = Countries.objects.get(name__iexact=pais_nombre)
-        ciudades = Cities.objects.filter(country=pais).order_by('name')
-        data = [{"id": c.id, "name": c.name, "latitude": c.latitude, "longitude": c.longitude} for c in ciudades]
-
+        ciudades = Cities.objects.filter(country_id=pais_id).order_by('name')
+        data = [{"id": c.id, "name": c.name} for c in ciudades]
+        
         return Response({
             "status": "success",
+            "message": f"Ciudades encontradas para el país ID {pais_id}.",
             "data": data
         })
-
-    except Countries.DoesNotExist:
+    except Exception as e:
         return Response({
             "status": "error",
-            "message": f"El país '{pais_nombre}' no existe.",
-            "data": None
-        }, status=404)
-    
-
-@api_view(['GET'])
-@permission_classes([AllowAny])
-def lugares_cercanos(request):
-    lugar = request.GET.get("lugar", "").strip()
-
-    if not lugar:
-        return Response({
-            "status": "error",
-            "message": "El parámetro 'lugar' es obligatorio.",
-            "data": None
-        }, status=400)
-
-    lugares = buscar_lugares_foursquare(lugar)
-
-    if lugares is not None:
-        return Response({
-            "status": "success",
-            "message": f"Lugares cercanos encontrados para '{lugar}'.",
-            "data": lugares
-        })
-    else:
-        return Response({
-            "status": "error",
-            "message": "No se pudo obtener la información de lugares.",
+            "message": f"Error al obtener ciudades: {str(e)}",
             "data": None
         }, status=500)
 
