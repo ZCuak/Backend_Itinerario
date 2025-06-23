@@ -7,7 +7,10 @@ from .views import (
     registro_usuario, login_usuario, logout_usuario, obtener_perfil_usuario,
     obtener_estado_por_ciudad
 )
-from .google_places_views import lugares_cercanos
+from .google_places_views import (
+    lugares_cercanos, generar_resumen_ia, generar_resumenes_lotes_ia, 
+    listar_lugares_con_resumenes
+)
 
 # Rutas de autenticación
 auth_urlpatterns = [
@@ -20,6 +23,9 @@ auth_urlpatterns = [
 # Rutas de Google Places
 google_places_urlpatterns = [
     path('lugares-cercanos/', lugares_cercanos, name='lugares_cercanos'),
+    path('generar-resumen-ia/', generar_resumen_ia, name='generar_resumen_ia'),
+    path('generar-resumenes-lotes-ia/', generar_resumenes_lotes_ia, name='generar_resumenes_lotes_ia'),
+    path('listar-lugares-resumenes/', listar_lugares_con_resumenes, name='listar_lugares_con_resumenes'),
 ]
 
 # Rutas de registro

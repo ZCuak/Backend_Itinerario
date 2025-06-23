@@ -208,3 +208,83 @@ class Actividad_Lugar(models.Model):
         db_table = 'actividad_lugar'
         unique_together = ('actividad', 'lugar')
 
+class NivelPrecio(models.Model):
+    nivel = models.IntegerField(unique=True)  # 0-4
+    descripcion = models.CharField(max_length=200)
+    rango_inferior = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+    rango_superior = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+    moneda = models.CharField(max_length=3, default='PEN')
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        db_table = 'nivel_precio'
+        ordering = ['nivel']
+
+    def __str__(self):
+        return f"Nivel {self.nivel}: {self.descripcion}"
+
+class LugarGooglePlaces(models.Model):
+    CATEGORIAS = [
+        ('restaurantes', 'Restaurantes'),
+        ('hoteles', 'Hoteles'),
+        ('lugares_acuaticos', 'Lugares Acuáticos'),
+        ('lugares_turisticos', 'Lugares Turísticos'),
+        ('discotecas', 'Discotecas'),
+        ('museos', 'Museos'),
+        ('lugares_campestres', 'Lugares Campestres'),
+        ('centros_comerciales', 'Centros Comerciales'),
+        ('lugares_de_entretenimiento', 'Lugares de Entretenimiento'),
+    ]
+    
+    # Campos básicos
+    nombre = models.CharField(max_length=255)
+    direccion = models.CharField(max_length=500)
+    tipo_principal = models.CharField(max_length=100)
+    tipos_adicionales = models.JSONField(default=list)
+    categoria = models.CharField(max_length=50, choices=CATEGORIAS)
+    place_id = models.CharField(max_length=100, blank=True, null=True)
+    
+    # Ubicación
+    latitud = models.FloatField()
+    longitud = models.FloatField()
+    
+    # Calificaciones
+    rating = models.FloatField(default=0)
+    total_ratings = models.IntegerField(default=0)
+    
+    # Información de contacto
+    website = models.URLField(max_length=500, blank=True, null=True)
+    telefono = models.CharField(max_length=50, blank=True, null=True)
+    
+    # Precios y horarios
+    nivel_precios = models.ForeignKey(NivelPrecio, on_delete=models.SET_NULL, null=True, blank=True)
+    horarios = models.JSONField(default=list)
+    
+    # Descripción
+    descripcion = models.TextField(blank=True, null=True)
+    
+    # Resumen generado por IA
+    resumen_ia = models.TextField(blank=True, null=True)
+    
+    # Estado del negocio
+    estado_negocio = models.CharField(max_length=50, default='OPERATIONAL')
+    
+    # Campos de control
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        db_table = 'lugar_google_places'
+        unique_together = ('nombre', 'direccion', 'latitud', 'longitud')
+        indexes = [
+            models.Index(fields=['categoria']),
+            models.Index(fields=['latitud', 'longitud']),
+            models.Index(fields=['rating']),
+        ]
+
+    def __str__(self):
+        return f"{self.nombre} - {self.categoria}"
+

@@ -2,7 +2,7 @@ from django.shortcuts import render
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
 from rest_framework.permissions import AllowAny, IsAuthenticated
-from .deepseek import enviar_prompt  
+from .deepseek.deepseek import enviar_prompt  
 from .images import obtener_fotos_lugar_mejoradas
 from .openweather import obtener_clima
 import os
