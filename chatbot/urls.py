@@ -54,4 +54,5 @@ urlpatterns = [
     path('auth/', include(auth_urlpatterns)),
     path('places/', include(google_places_urlpatterns)),
     path('registrar/', include(registro_urlpatterns)),
+    path('pinecone/', include('chatbot.pinecone.urls')),
 ]

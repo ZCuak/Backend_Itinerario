@@ -292,4 +292,318 @@ Las siguientes categorías están disponibles para filtrar:
         }
     }
 }
-``` 
+```
+
+# API de Búsqueda Natural con Pinecone y DeepSeek
+
+## 🆕 Nueva Funcionalidad: Búsqueda Natural
+
+El sistema ahora puede procesar mensajes naturales del usuario usando DeepSeek para extraer automáticamente los criterios de búsqueda.
+
+### Endpoint Principal
+
+```bash
+POST /api/pinecone/places/process-natural-search/
+```
+
+### Ejemplo de Uso
+
+**Request:**
+```json
+{
+    "user_message": "para comer quiero ir a una cafetería de 4 estrellas"
+}
+```
+
+**Response:**
+```json
+{
+    "success": true,
+    "user_message": "para comer quiero ir a una cafetería de 4 estrellas",
+    "extracted_criteria": {
+        "place_type": "cafetería",
+        "category": "restaurantes",
+        "rating_min": 4.0,
+        "intent": "comer",
+        "features": []
+    },
+    "search_method_used": "rating_and_features",
+    "total_results": 3,
+    "results": [
+        {
+            "id": 123,
+            "nombre": "Café Central",
+            "tipo_principal": "cafe",
+            "rating": 4.2,
+            "nivel_precios": "Moderado",
+            "direccion": "Av. Principal 123",
+            "resumen_ia": "Cafetería elegante con ambiente acogedor...",
+            "score": 0.85
+        }
+    ]
+}
+```
+
+### Ejemplos de Mensajes Naturales
+
+| Mensaje del Usuario | Criterios Extraídos |
+|---------------------|-------------------|
+| "para comer quiero ir a una cafetería de 4 estrellas" | `place_type: "cafetería", rating_min: 4.0, intent: "comer"` |
+| "busco un restaurante italiano que esté abierto ahora" | `place_type: "restaurante", features: ["italiano"], opening_hours: "abierto_ahora"` |
+| "necesito un hotel de 3 estrellas con gimnasio y piscina" | `place_type: "hotel", rating_min: 3.0, features: ["gimnasio", "piscina"], intent: "dormir"` |
+| "quiero ir a un bar con música en vivo abierto 24 horas" | `place_type: "bar", features: ["música en vivo"], opening_hours: "24_horas"` |
+| "busco un centro comercial abierto fines de semana" | `place_type: "centro comercial", opening_hours: "fines_semana", intent: "compras"` |
+
+## APIs de Búsqueda Específica
+
+### 1. Búsqueda por Tipo y Características
+
+```bash
+POST /api/pinecone/places/search-by-type-and-features/
+```
+
+```json
+{
+    "place_type": "restaurante",
+    "features": ["italiano", "terraza"],
+    "top_k": 5
+}
+```
+
+### 2. Búsqueda con Rating Específico
+
+```bash
+POST /api/pinecone/places/search-with-rating-and-features/
+```
+
+```json
+{
+    "place_type": "restaurante",
+    "rating": 4.0,
+    "features": ["peruano", "ceviche"],
+    "rating_tolerance": 0.5,
+    "top_k": 5
+}
+```
+
+### 3. Búsqueda por Horarios
+
+```bash
+POST /api/pinecone/places/search-by-opening-hours/
+```
+
+```json
+{
+    "place_type": "restaurante",
+    "opening_criteria": "abierto_ahora",
+    "features": ["italiano"],
+    "top_k": 5
+}
+```
+
+**Criterios de horario disponibles:**
+- `abierto_ahora`: Lugares abiertos en este momento
+- `24_horas`: Lugares abiertos las 24 horas
+- `fines_semana`: Lugares abiertos los fines de semana
+- `lunes_viernes`: Lugares abiertos de lunes a viernes
+
+### 4. Búsqueda por Categoría
+
+```bash
+POST /api/pinecone/places/search-by-category-and-features/
+```
+
+```json
+{
+    "category": "lugares_de_entretenimiento",
+    "features": ["niños", "familia"],
+    "rating_min": 4.0,
+    "top_k": 5
+}
+```
+
+### 5. Búsqueda Inteligente
+
+```bash
+POST /api/pinecone/places/smart-search/
+```
+
+```json
+{
+    "place_type": "restaurante",
+    "category": "restaurantes",
+    "features": ["italiano", "terraza"],
+    "rating_min": 4.0,
+    "rating_max": 5.0,
+    "opening_hours": "abierto_ahora",
+    "location": "Chiclayo centro",
+    "price_level": "moderado",
+    "top_k": 5
+}
+```
+
+## APIs para Hoteles Específicos
+
+### 1. Búsqueda de Hoteles con Amenidades
+
+```bash
+POST /api/pinecone/places/search-hotels/
+```
+
+```json
+{
+    "amenities": ["gimnasio", "piscina", "spa"],
+    "top_k": 5
+}
+```
+
+### 2. Búsqueda de Hoteles con Rating
+
+```bash
+POST /api/pinecone/places/search-hotels-rating/
+```
+
+```json
+{
+    "rating": 3.0,
+    "amenities": ["restaurante", "estacionamiento"],
+    "rating_tolerance": 0.5,
+    "top_k": 5
+}
+```
+
+### 3. Búsqueda de Hoteles por Rango de Rating
+
+```bash
+POST /api/pinecone/places/search-hotels-rating-range/
+```
+
+```json
+{
+    "min_rating": 3.0,
+    "max_rating": 4.0,
+    "amenities": ["restaurante"],
+    "top_k": 5
+}
+```
+
+## APIs de Gestión
+
+### 1. Sincronización
+
+```bash
+POST /api/pinecone/places/sync/
+```
+
+Sincroniza todos los lugares de la base de datos con Pinecone.
+
+### 2. Estadísticas
+
+```bash
+GET /api/pinecone/places/stats/
+```
+
+Obtiene estadísticas del índice de Pinecone.
+
+### 3. Limpiar Índice
+
+```bash
+POST /api/pinecone/places/clear-index/
+```
+
+Elimina todos los vectores del índice.
+
+## Categorías Disponibles
+
+- `restaurantes`
+- `hoteles`
+- `lugares_acuaticos`
+- `lugares_turisticos`
+- `discotecas`
+- `museos`
+- `lugares_campestres`
+- `centros_comerciales`
+- `lugares_de_entretenimiento`
+
+## Tipos de Lugares Soportados
+
+- **Hoteles**: `hotel`, `lodging`
+- **Restaurantes**: `restaurant`, `food`, `cafetería`
+- **Bares**: `bar`, `night_club`
+- **Parques**: `park`, `natural_feature`
+- **Centros Comerciales**: `shopping_mall`, `store`
+- **Museos**: `museum`, `art_gallery`
+- **Discotecas**: `night_club`, `bar`
+- **Lugares Turísticos**: `tourist_attraction`, `point_of_interest`
+
+## Configuración Requerida
+
+### Variables de Entorno
+
+```bash
+PINECONE_API_KEY=tu_api_key_de_pinecone
+PINECONE_ENVIRONMENT=tu_environment
+API_KEY_OPENAI=tu_api_key_de_deepseek
+```
+
+### Configuración por Defecto
+
+- **Modelo de embeddings**: `sentence-transformers/all-MiniLM-L6-v2`
+- **Métrica de similitud**: `cosine`
+- **Umbral de similitud**: `0.3`
+- **Top K**: `5`
+
+## Ventajas del Sistema
+
+1. **🤖 IA Natural**: Procesa mensajes naturales del usuario
+2. **🎯 Flexibilidad total**: Busca cualquier tipo de lugar
+3. **🔍 Búsqueda semántica**: Encuentra lugares similares por significado
+4. **⚡ Filtros precisos**: Rating, tipo, categoría, horarios, etc.
+5. **🕒 Búsqueda por horarios**: Encuentra lugares abiertos según criterios específicos
+6. **📊 Escalabilidad**: Pinecone maneja millones de vectores
+7. **🚀 Rendimiento**: Búsquedas rápidas en tiempo real
+
+## Ejemplo de Uso Completo
+
+### 1. Configurar Variables de Entorno
+
+```bash
+export PINECONE_API_KEY="tu_api_key"
+export PINECONE_ENVIRONMENT="tu_environment"
+export API_KEY_OPENAI="tu_api_key_deepseek"
+```
+
+### 2. Sincronizar Datos
+
+```bash
+curl -X POST http://localhost:8000/api/pinecone/places/sync/ \
+  -H "Authorization: Bearer tu_token" \
+  -H "Content-Type: application/json"
+```
+
+### 3. Realizar Búsqueda Natural
+
+```bash
+curl -X POST http://localhost:8000/api/pinecone/places/process-natural-search/ \
+  -H "Authorization: Bearer tu_token" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "user_message": "para comer quiero ir a una cafetería de 4 estrellas"
+  }'
+```
+
+### 4. Verificar Estadísticas
+
+```bash
+curl -X GET http://localhost:8000/api/pinecone/places/stats/ \
+  -H "Authorization: Bearer tu_token"
+```
+
+## Consideraciones
+
+- **Umbral de similitud**: Ajusta según la precisión deseada (0.3 por defecto)
+- **Tolerancia de rating**: Permite flexibilidad en las búsquedas (0.5 por defecto)
+- **Top K**: Limita el número de resultados para mejor rendimiento
+- **Horarios**: Los criterios de horario son semánticos, no exactos
+- **DeepSeek**: Requiere API key configurada para procesamiento natural
+- **Sincronización**: Mantén los datos actualizados regularmente 
