@@ -21,7 +21,17 @@ def get_places_vector_store():
     """Obtener instancia del gestor de lugares vectoriales"""
     global places_vector_store
     if places_vector_store is None:
-        places_vector_store = PlacesVectorStore()
+        print("🔄 Inicializando PlacesVectorStore...")
+        try:
+            places_vector_store = PlacesVectorStore()
+            print("✅ PlacesVectorStore inicializado exitosamente")
+        except Exception as e:
+            print(f"❌ Error al inicializar PlacesVectorStore: {e}")
+            import traceback
+            print(f"🔍 Traceback completo: {traceback.format_exc()}")
+            raise
+    else:
+        print("✅ PlacesVectorStore ya inicializado, reutilizando instancia")
     return places_vector_store
 
 @api_view(['POST'])
@@ -113,14 +123,37 @@ def search_places(request):
         query = request.GET.get('query', '').strip()
         top_k = int(request.GET.get('top_k', 5))
         
+        print(f"🔍 Iniciando búsqueda de lugares")
+        print(f"📝 Query recibida: '{query}'")
+        print(f"📊 Top_k solicitado: {top_k}")
+        
         if not query:
+            print("❌ Query vacía recibida")
             return Response({
                 'error': 'query es requerido'
             }, status=status.HTTP_400_BAD_REQUEST)
         
         # Realizar búsqueda
+        print("🔄 Inicializando vector store...")
         vector_store = get_places_vector_store()
+        print("✅ Vector store inicializado")
+        
+        print("🔍 Ejecutando búsqueda semántica...")
         results = vector_store.search_places(query, top_k=top_k)
+        print(f"📊 Resultados obtenidos: {len(results)}")
+        
+        # Log detallado de resultados
+        if results:
+            print("📋 Detalles de resultados:")
+            for i, result in enumerate(results[:3]):  # Solo primeros 3
+                print(f"  {i+1}. Score: {result.get('score', 'N/A')} - ID: {result.get('id', 'N/A')}")
+                if 'metadata' in result:
+                    metadata = result['metadata']
+                    print(f"     Nombre: {metadata.get('nombre', 'N/A')}")
+                    print(f"     Tipo: {metadata.get('tipo_principal', 'N/A')}")
+                    print(f"     Rating: {metadata.get('rating', 'N/A')}")
+        else:
+            print("⚠️ No se encontraron resultados")
         
         return Response({
             'success': True,
@@ -130,11 +163,14 @@ def search_places(request):
         }, status=status.HTTP_200_OK)
     
     except ValueError as e:
+        print(f"❌ Error de parámetros: {e}")
         return Response({
             'error': 'Parámetros inválidos'
         }, status=status.HTTP_400_BAD_REQUEST)
     except Exception as e:
-        logger.error(f"Error en búsqueda de lugares: {e}")
+        print(f"❌ Error en búsqueda de lugares: {e}")
+        import traceback
+        print(f"🔍 Traceback completo: {traceback.format_exc()}")
         return Response({
             'error': 'Error interno del servidor'
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

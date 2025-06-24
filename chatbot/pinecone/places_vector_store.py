@@ -174,35 +174,104 @@ class PlacesVectorStore:
             Lista de resultados con score y metadatos
         """
         try:
+            print(f"🔍 PlacesVectorStore.search_places iniciado")
+            print(f"📝 Query: '{query}'")
+            print(f"📊 Top_k: {top_k}")
+            print(f"🔧 Filtros: {filter_dict}")
+            
+            # Mejorar la query para que sea más semánticamente similar a los textos de embedding
+            improved_query = self._improve_query_for_search(query)
+            
             # Generar embedding de la consulta
-            query_embedding = self.embedding_generator.embeddings.get_embedding(query)
+            print("🔄 Generando embedding de la consulta...")
+            query_embedding = self.embedding_generator.embeddings.get_embedding(improved_query)
+            print(f"✅ Embedding generado, dimensión: {len(query_embedding)}")
             
             # Configurar parámetros de búsqueda
             top_k = top_k or self.config.TOP_K
+            print(f"📊 Top_k final: {top_k}")
+            
+            # Determinar umbral de similitud basado en el tipo de búsqueda
+            similarity_threshold = self._get_similarity_threshold(query)
+            
+            print(f"🎯 Umbral de similitud final: {similarity_threshold}")
+            
+            # Verificar estadísticas del índice
+            try:
+                stats = self.index.describe_index_stats()
+                total_vectors = stats.total_vector_count
+                print(f"📈 Total de vectores en el índice: {total_vectors}")
+                
+                if total_vectors == 0:
+                    print("⚠️ El índice está vacío. No hay lugares indexados.")
+                    return []
+                    
+            except Exception as e:
+                print(f"❌ Error al obtener estadísticas del índice: {e}")
             
             # Realizar búsqueda
+            print("🔍 Ejecutando búsqueda en Pinecone...")
             results = self.index.query(
                 vector=query_embedding,
                 top_k=top_k,
                 filter=filter_dict,
                 include_metadata=True
             )
+            print(f"📊 Resultados raw de Pinecone: {len(results.matches)}")
+            
+            # Log de resultados raw
+            for i, match in enumerate(results.matches[:3]):  # Solo primeros 3
+                print(f"  Raw {i+1}. ID: {match.id}, Score: {match.score}")
+                if hasattr(match, 'metadata') and match.metadata:
+                    print(f"     Metadata: {list(match.metadata.keys())}")
+                    # Mostrar información específica del lugar
+                    if 'nombre' in match.metadata:
+                        print(f"     Nombre: {match.metadata.get('nombre', 'N/A')}")
+                    if 'tipo_principal' in match.metadata:
+                        print(f"     Tipo: {match.metadata.get('tipo_principal', 'N/A')}")
+                    if 'resumen_ia' in match.metadata:
+                        resumen = match.metadata.get('resumen_ia', '')
+                        if resumen:
+                            print(f"     Resumen IA: {resumen[:100]}...")
             
             # Procesar resultados
             processed_results = []
+            print("🔄 Procesando resultados...")
+            
             for match in results.matches:
-                if match.score >= self.config.SIMILARITY_THRESHOLD:
+                print(f"  Procesando: ID={match.id}, Score={match.score}, Threshold={similarity_threshold}")
+                
+                if match.score >= similarity_threshold:
                     processed_results.append({
                         'id': match.id,
                         'score': match.score,
                         'metadata': match.metadata
                     })
+                    print(f"    ✅ Aceptado (score >= threshold)")
+                else:
+                    print(f"    ❌ Rechazado (score < threshold)")
             
-            logger.info(f"Búsqueda de lugares completada: {len(processed_results)} resultados")
+            print(f"📊 Resultados finales procesados: {len(processed_results)}")
+            
+            # Log detallado de resultados finales
+            if processed_results:
+                print("📋 Resultados finales:")
+                for i, result in enumerate(processed_results[:3]):
+                    print(f"  {i+1}. Score: {result['score']} - ID: {result['id']}")
+                    if 'metadata' in result and result['metadata']:
+                        metadata = result['metadata']
+                        print(f"     Nombre: {metadata.get('nombre', 'N/A')}")
+                        print(f"     Tipo: {metadata.get('tipo_principal', 'N/A')}")
+                        print(f"     Rating: {metadata.get('rating', 'N/A')}")
+            else:
+                print("⚠️ No hay resultados que cumplan el umbral de similitud")
+            
             return processed_results
         
         except Exception as e:
-            logger.error(f"Error en búsqueda de lugares: {e}")
+            print(f"❌ Error en búsqueda de lugares: {e}")
+            import traceback
+            print(f"🔍 Traceback completo: {traceback.format_exc()}")
             raise
     
     def find_hotels_with_amenities(self, amenities: List[str], top_k: int = 5) -> List[Dict[str, Any]]:
@@ -827,30 +896,60 @@ class PlacesVectorStore:
             Número de lugares sincronizados
         """
         try:
+            print(f"🔄 Iniciando sincronización de lugares desde la base de datos")
+            print(f"📊 Batch size: {batch_size}")
+            
             # Obtener todos los lugares activos
+            print("📋 Consultando lugares activos en la base de datos...")
             lugares = LugarGooglePlaces.objects.filter(is_active=True)
             total_lugares = lugares.count()
+            print(f"📈 Total de lugares activos encontrados: {total_lugares}")
             
             if total_lugares == 0:
-                logger.warning("No hay lugares activos en la base de datos")
+                print("⚠️ No hay lugares activos en la base de datos")
                 return 0
+            
+            # Verificar algunos lugares de ejemplo
+            print("📋 Ejemplos de lugares encontrados:")
+            for i, lugar in enumerate(lugares[:3]):
+                print(f"  {i+1}. ID: {lugar.id}, Nombre: {lugar.nombre}, Tipo: {lugar.tipo_principal}")
+                if lugar.resumen_ia:
+                    print(f"     Resumen IA: {lugar.resumen_ia[:100]}...")
             
             # Procesar en lotes
             processed_count = 0
             for i in range(0, total_lugares, batch_size):
                 batch = lugares[i:i + batch_size]
+                print(f"🔄 Procesando lote {i//batch_size + 1}: lugares {i+1} a {min(i+batch_size, total_lugares)}")
                 
                 # Agregar lote a Pinecone
-                vector_ids = self.add_places(list(batch))
-                processed_count += len(vector_ids)
+                try:
+                    vector_ids = self.add_places(list(batch))
+                    processed_count += len(vector_ids)
+                    print(f"✅ Lote procesado: {len(vector_ids)} lugares agregados")
+                except Exception as e:
+                    print(f"❌ Error al procesar lote: {e}")
+                    import traceback
+                    print(f"🔍 Traceback completo: {traceback.format_exc()}")
+                    continue
                 
-                logger.info(f"Procesados {processed_count}/{total_lugares} lugares")
+                print(f"📊 Progreso: {processed_count}/{total_lugares} lugares procesados")
             
-            logger.info(f"Sincronización completada: {processed_count} lugares procesados")
+            print(f"🎉 Sincronización completada: {processed_count} lugares procesados")
+            
+            # Verificar estadísticas finales
+            try:
+                stats = self.index.describe_index_stats()
+                print(f"📈 Estadísticas finales del índice: {stats.total_vector_count} vectores totales")
+            except Exception as e:
+                print(f"❌ Error al obtener estadísticas finales: {e}")
+            
             return processed_count
         
         except Exception as e:
-            logger.error(f"Error en sincronización de lugares: {e}")
+            print(f"❌ Error en sincronización de lugares: {e}")
+            import traceback
+            print(f"🔍 Traceback completo: {traceback.format_exc()}")
             raise
     
     def find_places_by_price_level(self, price_level: str, place_type: Optional[str] = None, 
@@ -987,4 +1086,73 @@ class PlacesVectorStore:
         
         except Exception as e:
             logger.error(f"Error al buscar lugares por nivel de precio: {e}")
-            raise 
+            raise
+    
+    def _improve_query_for_search(self, query: str) -> str:
+        """
+        Mejorar la query para que sea más semánticamente similar a los textos de embedding
+        
+        Args:
+            query: Query original del usuario
+            
+        Returns:
+            Query mejorada
+        """
+        try:
+            # Convertir a minúsculas
+            query = query.lower()
+            
+            # Mapear términos comunes a términos más específicos
+            query_improvements = {
+                'quiero': '',
+                'busco': '', 
+                'necesito': '',
+                'hotel con piscina': 'hotel piscina',
+                'hotel que tenga piscina': 'hotel piscina',
+                'hotel con gimnasio': 'hotel gimnasio',
+                'restaurante con terraza': 'restaurante terraza',
+                'lugar con wifi': 'wifi internet',
+                'hotel 24 horas': 'hotel 24 horas',
+                'restaurante abierto tarde': 'restaurante horario nocturno',
+                'lugar económico': 'económico barato',
+                'hotel de lujo': 'hotel lujo premium'
+            }
+            
+            # Aplicar mejoras
+            improved_query = query
+            for original, improved in query_improvements.items():
+                if original in improved_query:
+                    improved_query = improved_query.replace(original, improved)
+                    break  # Solo aplicar una mejora
+            
+            # Limpiar espacios extra
+            improved_query = ' '.join(improved_query.split())
+            
+            print(f"🔧 Query original: '{query}'")
+            print(f"🔧 Query mejorada: '{improved_query}'")
+            
+            return improved_query
+        
+        except Exception as e:
+            print(f"❌ Error al mejorar query: {e}")
+            return query
+    
+    def _get_similarity_threshold(self, query: str) -> float:
+        """
+        Obtener umbral de similitud basado en el tipo de búsqueda
+        
+        Args:
+            query: Query de búsqueda
+            
+        Returns:
+            Umbral de similitud (0.0 a 1.0)
+        """
+        query_lower = query.lower()
+        
+        # Umbrales más permisivos para el enfoque simplificado
+        if 'hotel' in query_lower:
+            return 0.55  # Hoteles: más permisivo
+        elif 'restaurante' in query_lower:
+            return 0.52  # Restaurantes: más permisivo
+        else:
+            return 0.50  # General: más permisivo 

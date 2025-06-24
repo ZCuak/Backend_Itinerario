@@ -4,13 +4,15 @@ import json
 from django.db import models
 from .embeddings import HuggingFaceEmbeddings
 from ..models import LugarGooglePlaces
+import re
+import unicodedata
 
 logger = logging.getLogger(__name__)
 
 class PlacesEmbeddingGenerator:
     """Generador de embeddings específico para lugares de Google Places"""
     
-    def __init__(self, model_name: str = 'sentence-transformers/all-MiniLM-L6-v2'):
+    def __init__(self, model_name: str = 'sentence-transformers/all-mpnet-base-v2'):
         """
         Inicializar el generador de embeddings para lugares
         
@@ -20,9 +22,42 @@ class PlacesEmbeddingGenerator:
         self.embeddings = HuggingFaceEmbeddings(model_name)
         logger.info("PlacesEmbeddingGenerator inicializado")
     
+    def _normalize_text(self, text: str) -> str:
+        """
+        Normalizar texto para embedding
+        
+        Args:
+            text: Texto a normalizar
+            
+        Returns:
+            Texto normalizado
+        """
+        try:
+            if not text:
+                return ""
+            
+            # Decodificar caracteres Unicode si es necesario
+            if isinstance(text, bytes):
+                text = text.decode('utf-8', errors='ignore')
+            
+            # Normalizar espacios y caracteres especiales
+            text = unicodedata.normalize('NFD', text)
+            
+            # Convertir a minúsculas
+            text = text.lower()
+            
+            # Limpiar espacios extra
+            text = ' '.join(text.split())
+            
+            return text
+            
+        except Exception as e:
+            print(f"❌ Error al normalizar texto: {e}")
+            return text if text else ""
+    
     def generate_place_text_for_embedding(self, lugar: LugarGooglePlaces) -> str:
         """
-        Generar texto optimizado para embedding que incluya toda la información relevante del lugar
+        Generar texto optimizado para embedding usando solo el resumen de IA
         
         Args:
             lugar: Instancia de LugarGooglePlaces
@@ -31,163 +66,22 @@ class PlacesEmbeddingGenerator:
             Texto formateado para generar embedding
         """
         try:
-            text_parts = []
-            
-            # 1. Nombre del lugar
-            if lugar.nombre:
-                text_parts.append(f"Lugar: {lugar.nombre}")
-            
-            # 2. Tipo principal y adicionales
-            if lugar.tipo_principal:
-                text_parts.append(f"Tipo principal: {lugar.tipo_principal}")
-            
-            if lugar.tipos_adicionales:
-                tipos_text = ", ".join(lugar.tipos_adicionales[:5])  # Limitar a 5 tipos
-                text_parts.append(f"Tipos adicionales: {tipos_text}")
-            
-            # 3. Categoría
-            if lugar.categoria:
-                text_parts.append(f"Categoría: {lugar.categoria}")
-            
-            # 4. Resumen de IA (contiene características importantes)
+            # Usar solo el resumen de IA que ya contiene toda la información relevante
             if lugar.resumen_ia:
-                text_parts.append(f"Descripción detallada: {lugar.resumen_ia}")
-            
-            # 5. Descripción general
-            if lugar.descripcion:
-                text_parts.append(f"Información: {lugar.descripcion}")
-            
-                # 6. Nivel de precios (información mejorada)
-            if lugar.nivel_precios:
-                precio_info = self._format_precio_info(lugar.nivel_precios)
-                if precio_info:
-                    text_parts.append(f"Precios: {precio_info}")
-            
-            # 7. Calificación
-            if lugar.rating > 0:
-                text_parts.append(f"Calificación: {lugar.rating}/5 estrellas")
-            
-            # 8. Horarios (información importante para búsquedas)
-            if lugar.horarios:
-                horarios_text = self._format_horarios(lugar.horarios)
-                if horarios_text:
-                    text_parts.append(f"Horarios: {horarios_text}")
-            
-            # 9. Estado del negocio
-            if lugar.estado_negocio:
-                text_parts.append(f"Estado: {lugar.estado_negocio}")
-            
-            # 10. Dirección (para contexto geográfico)
-            if lugar.direccion:
-                text_parts.append(f"Ubicación: {lugar.direccion}")
-            
-            # Unir todas las partes
-            combined_text = ". ".join(text_parts)
-            
-            return combined_text
+                # Normalizar el texto final
+                normalized_text = self._normalize_text(lugar.resumen_ia)
+                print(f"📝 Texto para embedding (ID {lugar.id}): {normalized_text[:100]}...")
+                return normalized_text
+            else:
+                # Fallback: usar nombre y tipo si no hay resumen
+                fallback_text = f"establecimiento {lugar.nombre} tipo {lugar.tipo_principal}"
+                print(f"⚠️ Sin resumen IA para lugar {lugar.id}, usando fallback: {fallback_text}")
+                return fallback_text
         
         except Exception as e:
-            logger.error(f"Error al generar texto para lugar {lugar.id}: {e}")
+            print(f"❌ Error al generar texto para lugar {lugar.id}: {e}")
             # Fallback: usar solo el nombre
-            return f"Lugar: {lugar.nombre}" if lugar.nombre else "Lugar sin nombre"
-    
-    def _format_horarios(self, horarios: list) -> str:
-        """
-        Formatear horarios para incluir en el texto de embedding
-        
-        Args:
-            horarios: Lista de horarios en formato JSON
-            
-        Returns:
-            Texto formateado de horarios
-        """
-        try:
-            if not horarios:
-                return ""
-            
-            # Extraer información relevante de horarios
-            horarios_info = []
-            
-            for horario in horarios:
-                if isinstance(horario, dict):
-                    # Información de días abiertos
-                    if 'open' in horario:
-                        open_info = horario['open']
-                        if isinstance(open_info, list) and len(open_info) > 0:
-                            # Contar días abiertos
-                            dias_abiertos = len(open_info)
-                            horarios_info.append(f"Abierto {dias_abiertos} días a la semana")
-                    
-                    # Información de horario específico
-                    if 'weekday_text' in horario:
-                        weekday_text = horario['weekday_text']
-                        if isinstance(weekday_text, list) and len(weekday_text) > 0:
-                            # Tomar algunos ejemplos de horarios
-                            ejemplos = weekday_text[:3]  # Primeros 3 días
-                            horarios_info.append(f"Horarios: {', '.join(ejemplos)}")
-                    
-                    # Información de siempre abierto
-                    if horario.get('always_open', False):
-                        horarios_info.append("Siempre abierto")
-            
-            return " | ".join(horarios_info) if horarios_info else ""
-        
-        except Exception as e:
-            logger.error(f"Error al formatear horarios: {e}")
-            return ""
-    
-    def _format_precio_info(self, nivel_precio) -> str:
-        """
-        Formatear información de precios para incluir en el texto de embedding
-        
-        Args:
-            nivel_precio: Instancia de NivelPrecio
-            
-        Returns:
-            Texto formateado de información de precios
-        """
-        try:
-            if not nivel_precio:
-                return ""
-            
-            precio_info = []
-            
-            # Agregar descripción del nivel
-            if nivel_precio.descripcion:
-                precio_info.append(nivel_precio.descripcion)
-            
-            # Agregar información del rango de precios si está disponible
-            if nivel_precio.rango_inferior and nivel_precio.rango_superior:
-                rango_text = f"Rango: {nivel_precio.rango_inferior} - {nivel_precio.rango_superior} {nivel_precio.moneda}"
-                precio_info.append(rango_text)
-            elif nivel_precio.rango_inferior:
-                rango_text = f"Desde: {nivel_precio.rango_inferior} {nivel_precio.moneda}"
-                precio_info.append(rango_text)
-            elif nivel_precio.rango_superior:
-                rango_text = f"Hasta: {nivel_precio.rango_superior} {nivel_precio.moneda}"
-                precio_info.append(rango_text)
-            
-            # Agregar información del nivel numérico
-            nivel_text = f"Nivel {nivel_precio.nivel}/4"
-            precio_info.append(nivel_text)
-            
-            # Agregar categorización de precio
-            if nivel_precio.nivel == 0:
-                precio_info.append("Gratis")
-            elif nivel_precio.nivel == 1:
-                precio_info.append("Muy económico")
-            elif nivel_precio.nivel == 2:
-                precio_info.append("Económico")
-            elif nivel_precio.nivel == 3:
-                precio_info.append("Moderado")
-            elif nivel_precio.nivel == 4:
-                precio_info.append("Caros")
-            
-            return " | ".join(precio_info)
-        
-        except Exception as e:
-            logger.error(f"Error al formatear información de precios: {e}")
-            return nivel_precio.descripcion if nivel_precio.descripcion else ""
+            return f"establecimiento {lugar.nombre}" if lugar.nombre else "establecimiento sin nombre"
     
     def get_place_embedding(self, lugar: LugarGooglePlaces) -> List[float]:
         """
@@ -373,7 +267,6 @@ class PlacesEmbeddingGenerator:
                 'nombre': lugar.nombre or "",
                 'tipo_principal': lugar.tipo_principal or "",
                 'tipos_adicionales': lugar.tipos_adicionales or [],
-                'categoria': lugar.categoria or "",
                 'direccion': lugar.direccion or "",
                 'latitud': float(lugar.latitud) if lugar.latitud else 0.0,
                 'longitud': float(lugar.longitud) if lugar.longitud else 0.0,
