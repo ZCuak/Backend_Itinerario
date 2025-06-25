@@ -1,1 +1,0 @@
-# Paquete Pinecone para integración con Hugging Face 

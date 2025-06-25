@@ -15,7 +15,7 @@ from django.core.exceptions import ValidationError
 from django.contrib.auth.password_validation import validate_password
 from datetime import datetime
 
-from .place_search import buscar_lugares_foursquare
+from .place_search import BuscadorInteligenteLugares
 
 @api_view(['GET'])
 @permission_classes([AllowAny])
@@ -790,4 +790,44 @@ def obtener_estado_por_ciudad(request):
             "status": "error",
             "message": f"Error al buscar el estado: {str(e)}",
             "data": None
+        }, status=500)
+
+@api_view(['POST'])
+def buscar_lugares_inteligente(request):
+    """
+    Búsqueda inteligente de lugares usando DeepSeek + filtro de palabras clave
+    
+    POST /api/buscar-lugares-inteligente/
+    {
+        "query": "Quiero un hotel donde pueda ejercitarme"
+    }
+    """
+    try:
+        # Obtener la consulta del usuario
+        query = request.data.get('query', '').strip()
+        
+        if not query:
+            return Response({
+                'error': 'La consulta es requerida'
+            }, status=400)
+        
+        # Inicializar buscador inteligente
+        buscador = BuscadorInteligenteLugares()
+        
+        # Realizar búsqueda inteligente
+        resultado = buscador.buscar_lugares_inteligente(query, top_k=5)
+        
+        if 'error' in resultado:
+            return Response(resultado, status=400)
+        
+        return Response({
+            'success': True,
+            'query': query,
+            'resultado': resultado
+        })
+        
+    except Exception as e:
+        logger.error(f"Error en búsqueda inteligente: {e}")
+        return Response({
+            'error': f'Error interno del servidor: {str(e)}'
         }, status=500)

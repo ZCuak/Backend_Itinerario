@@ -5,7 +5,7 @@ from .views import (
     registrar_lugar, registrar_itinerario, registrar_actividad,
     registrar_actividad_lugar, obtener_ids_ciudad_pais, obtener_itinerario_completo,
     registro_usuario, login_usuario, logout_usuario, obtener_perfil_usuario,
-    obtener_estado_por_ciudad
+    obtener_estado_por_ciudad, buscar_lugares_inteligente
 )
 from .google_places_views import (
     lugares_cercanos, generar_resumen_ia, generar_resumenes_lotes_ia, 
@@ -50,9 +50,11 @@ urlpatterns = [
     path('obtener-ids/', obtener_ids_ciudad_pais, name='obtener_ids_ciudad_pais'),
     path('itinerario/', obtener_itinerario_completo, name='obtener_itinerario_completo'),
     
+    # Búsqueda inteligente
+    path('buscar-lugares-inteligente/', buscar_lugares_inteligente, name='buscar_lugares_inteligente'),
+    
     # Rutas agrupadas
     path('auth/', include(auth_urlpatterns)),
     path('places/', include(google_places_urlpatterns)),
     path('registrar/', include(registro_urlpatterns)),
-    path('pinecone/', include('chatbot.pinecone.urls')),
 ]
