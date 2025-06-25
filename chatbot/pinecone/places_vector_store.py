@@ -57,8 +57,8 @@ class PlacesVectorStore:
                     dimension=dimension,
                     metric=self.config.METRIC,
                     spec=ServerlessSpec(
-                        cloud='aws',
-                        region=self.config.PINECONE_ENVIRONMENT
+                        cloud=self.config.PINECONE_CLOUD,
+                        region=self.config.PINECONE_REGION
                     )
                 )
                 
@@ -192,7 +192,7 @@ class PlacesVectorStore:
             print(f"📊 Top_k final: {top_k}")
             
             # Determinar umbral de similitud basado en el tipo de búsqueda
-            similarity_threshold = self._get_similarity_threshold(query)
+            similarity_threshold = self._get_dynamic_threshold(query)
             
             print(f"🎯 Umbral de similitud final: {similarity_threshold}")
             
@@ -274,139 +274,175 @@ class PlacesVectorStore:
             print(f"🔍 Traceback completo: {traceback.format_exc()}")
             raise
     
-    def find_hotels_with_amenities(self, amenities: List[str], top_k: int = 5) -> List[Dict[str, Any]]:
+    def find_places_with_amenities(self, amenities: List[str], place_type: str = None, top_k: int = 5) -> List[Dict[str, Any]]:
         """
-        Buscar hoteles con amenidades específicas
+        Buscar lugares con amenidades específicas (genérico para todos los tipos)
         
         Args:
-            amenities: Lista de amenidades (ej: ['gimnasio', 'piscina', 'spa'])
+            amenities: Lista de amenidades a buscar
+            place_type: Tipo de lugar específico (opcional)
             top_k: Número máximo de resultados
             
         Returns:
-            Lista de hoteles que tienen las amenidades
+            Lista de lugares que tienen las amenidades
         """
         try:
-            # Crear consulta para hoteles con amenidades
-            query = f"Hotel con {' y '.join(amenities)}"
-            
-            # Filtrar solo hoteles
-            filter_dict = {
-                'vector_type': 'place',
-                'tipo_principal': {'$in': ['hotel', 'Hotel', 'lodging', 'Lodging']}
-            }
-            
-            # Realizar búsqueda
-            results = self.search_places(query, top_k=top_k, filter_dict=filter_dict)
-            
-            # Filtrar por umbral de similitud
-            threshold = 0.4  # Umbral específico para hoteles
-            filtered_results = [r for r in results if r['score'] >= threshold]
-            
-            logger.info(f"Encontrados {len(filtered_results)} hoteles con amenidades: {amenities}")
-            return filtered_results
-        
-        except Exception as e:
-            logger.error(f"Error al buscar hoteles con amenidades: {e}")
-            raise
-    
-    def find_hotels_with_rating_and_amenities(self, rating: float, amenities: List[str], 
-                                            top_k: int = 5, rating_tolerance: float = 0.5) -> List[Dict[str, Any]]:
-        """
-        Buscar hoteles con rating específico y amenidades
-        
-        Args:
-            rating: Rating mínimo requerido (ej: 3.0 para 3 estrellas)
-            amenities: Lista de amenidades (ej: ['restaurante', 'gimnasio'])
-            top_k: Número máximo de resultados
-            rating_tolerance: Tolerancia para el rating (ej: 0.5 significa 3.0-3.5)
-            
-        Returns:
-            Lista de hoteles que cumplen con el rating y amenidades
-        """
-        try:
-            # Crear consulta para hoteles con amenidades
-            query = f"Hotel de {rating} estrellas con {' y '.join(amenities)}"
-            
-            # Filtrar por tipo de lugar y rating
-            filter_dict = {
-                'vector_type': 'place',
-                'tipo_principal': {'$in': ['hotel', 'Hotel', 'lodging', 'Lodging']},
-                'rating': {
-                    '$gte': rating - rating_tolerance,
-                    '$lte': rating + rating_tolerance
-                }
-            }
-            
-            # Realizar búsqueda
-            results = self.search_places(query, top_k=top_k, filter_dict=filter_dict)
-            
-            # Filtrar por umbral de similitud
-            threshold = 0.35  # Umbral más bajo para búsquedas específicas
-            filtered_results = [r for r in results if r['score'] >= threshold]
-            
-            # Ordenar por rating (mayor a menor) y luego por score
-            filtered_results.sort(key=lambda x: (
-                x['metadata'].get('rating', 0), 
-                x['score']
-            ), reverse=True)
-            
-            logger.info(f"Encontrados {len(filtered_results)} hoteles de {rating} estrellas con amenidades: {amenities}")
-            return filtered_results
-        
-        except Exception as e:
-            logger.error(f"Error al buscar hoteles con rating y amenidades: {e}")
-            raise
-    
-    def find_hotels_by_rating_range(self, min_rating: float, max_rating: float, 
-                                   amenities: Optional[List[str]] = None, top_k: int = 5) -> List[Dict[str, Any]]:
-        """
-        Buscar hoteles en un rango de rating específico
-        
-        Args:
-            min_rating: Rating mínimo (ej: 3.0)
-            max_rating: Rating máximo (ej: 4.0)
-            amenities: Lista opcional de amenidades
-            top_k: Número máximo de resultados
-            
-        Returns:
-            Lista de hoteles en el rango de rating
-        """
-        try:
-            # Crear consulta base
-            if amenities:
-                query = f"Hotel de {min_rating} a {max_rating} estrellas con {' y '.join(amenities)}"
+            # Crear consulta genérica para lugares con amenidades
+            if place_type:
+                query = f"{place_type} con {' y '.join(amenities)}"
             else:
-                query = f"Hotel de {min_rating} a {max_rating} estrellas"
+                query = f"lugar con {' y '.join(amenities)}"
             
-            # Filtrar por tipo de lugar y rango de rating
-            filter_dict = {
-                'vector_type': 'place',
-                'tipo_principal': {'$in': ['hotel', 'Hotel', 'lodging', 'Lodging']},
-                'rating': {
-                    '$gte': min_rating,
-                    '$lte': max_rating
-                }
-            }
+            # Mejorar la query
+            improved_query = self._improve_query_for_search(query)
+            
+            # Filtrar por tipo si se especifica
+            filter_dict = {}
+            if place_type:
+                filter_dict['tipo_principal'] = {'$in': [place_type.lower(), place_type.capitalize()]}
             
             # Realizar búsqueda
-            results = self.search_places(query, top_k=top_k, filter_dict=filter_dict)
+            results = self.search_places(
+                query=improved_query,
+                top_k=top_k * 2,  # Buscar más para filtrar después
+                filter_dict=filter_dict if filter_dict else None
+            )
             
             # Filtrar por umbral de similitud
-            threshold = 0.3  # Umbral más bajo para búsquedas por rating
+            threshold = 0.4  # Umbral genérico
             filtered_results = [r for r in results if r['score'] >= threshold]
             
-            # Ordenar por rating (mayor a menor) y luego por score
-            filtered_results.sort(key=lambda x: (
-                x['metadata'].get('rating', 0), 
-                x['score']
-            ), reverse=True)
+            # Limitar resultados
+            filtered_results = filtered_results[:top_k]
             
-            logger.info(f"Encontrados {len(filtered_results)} hoteles entre {min_rating} y {max_rating} estrellas")
+            logger.info(f"Encontrados {len(filtered_results)} lugares con amenidades: {amenities}")
             return filtered_results
-        
+            
         except Exception as e:
-            logger.error(f"Error al buscar hoteles por rango de rating: {e}")
-            raise
+            logger.error(f"Error al buscar lugares con amenidades: {e}")
+            return []
+
+    def find_places_with_rating_and_amenities(self, rating: float, amenities: List[str],
+                                            place_type: str = None, top_k: int = 5) -> List[Dict[str, Any]]:
+        """
+        Buscar lugares con rating específico y amenidades (genérico para todos los tipos)
+        
+        Args:
+            rating: Rating mínimo requerido
+            amenities: Lista de amenidades a buscar
+            place_type: Tipo de lugar específico (opcional)
+            top_k: Número máximo de resultados
+            
+        Returns:
+            Lista de lugares que cumplen con el rating y amenidades
+        """
+        try:
+            # Crear consulta genérica para lugares con rating y amenidades
+            if place_type:
+                query = f"{place_type} de {rating} estrellas con {' y '.join(amenities)}"
+            else:
+                query = f"lugar de {rating} estrellas con {' y '.join(amenities)}"
+            
+            # Mejorar la query
+            improved_query = self._improve_query_for_search(query)
+            
+            # Filtrar por tipo y rating
+            filter_dict = {}
+            if place_type:
+                filter_dict['tipo_principal'] = {'$in': [place_type.lower(), place_type.capitalize()]}
+            
+            # Realizar búsqueda
+            results = self.search_places(
+                query=improved_query,
+                top_k=top_k * 2,
+                filter=filter_dict if filter_dict else None
+            )
+            
+            # Filtrar por rating y umbral de similitud
+            threshold = 0.4
+            filtered_results = []
+            for r in results:
+                if r['score'] >= threshold:
+                    # Verificar rating si está disponible
+                    metadata = r.get('metadata', {})
+                    place_rating = metadata.get('rating')
+                    if place_rating and float(place_rating) >= rating:
+                        filtered_results.append(r)
+            
+            # Limitar resultados
+            filtered_results = filtered_results[:top_k]
+            
+            logger.info(f"Encontrados {len(filtered_results)} lugares de {rating} estrellas con amenidades: {amenities}")
+            return filtered_results
+            
+        except Exception as e:
+            logger.error(f"Error al buscar lugares con rating y amenidades: {e}")
+            return []
+
+    def find_places_by_rating_range(self, min_rating: float, max_rating: float,
+                                  amenities: List[str] = None, place_type: str = None, 
+                                  top_k: int = 5) -> List[Dict[str, Any]]:
+        """
+        Buscar lugares en un rango de rating específico (genérico para todos los tipos)
+        
+        Args:
+            min_rating: Rating mínimo
+            max_rating: Rating máximo
+            amenities: Lista de amenidades (opcional)
+            place_type: Tipo de lugar específico (opcional)
+            top_k: Número máximo de resultados
+            
+        Returns:
+            Lista de lugares en el rango de rating
+        """
+        try:
+            # Crear consulta genérica
+            if amenities:
+                if place_type:
+                    query = f"{place_type} de {min_rating} a {max_rating} estrellas con {' y '.join(amenities)}"
+                else:
+                    query = f"lugar de {min_rating} a {max_rating} estrellas con {' y '.join(amenities)}"
+            else:
+                if place_type:
+                    query = f"{place_type} de {min_rating} a {max_rating} estrellas"
+                else:
+                    query = f"lugar de {min_rating} a {max_rating} estrellas"
+            
+            # Mejorar la query
+            improved_query = self._improve_query_for_search(query)
+            
+            # Filtrar por tipo
+            filter_dict = {}
+            if place_type:
+                filter_dict['tipo_principal'] = {'$in': [place_type.lower(), place_type.capitalize()]}
+            
+            # Realizar búsqueda
+            results = self.search_places(
+                query=improved_query,
+                top_k=top_k * 2,
+                filter=filter_dict if filter_dict else None
+            )
+            
+            # Filtrar por rango de rating y umbral de similitud
+            threshold = 0.4
+            filtered_results = []
+            for r in results:
+                if r['score'] >= threshold:
+                    # Verificar rating si está disponible
+                    metadata = r.get('metadata', {})
+                    place_rating = metadata.get('rating')
+                    if place_rating and min_rating <= float(place_rating) <= max_rating:
+                        filtered_results.append(r)
+            
+            # Limitar resultados
+            filtered_results = filtered_results[:top_k]
+            
+            logger.info(f"Encontrados {len(filtered_results)} lugares entre {min_rating} y {max_rating} estrellas")
+            return filtered_results
+            
+        except Exception as e:
+            logger.error(f"Error al buscar lugares por rango de rating: {e}")
+            return []
     
     def find_places_by_features(self, features: List[str], top_k: int = 5) -> List[Dict[str, Any]]:
         """
@@ -1091,6 +1127,7 @@ class PlacesVectorStore:
     def _improve_query_for_search(self, query: str) -> str:
         """
         Mejorar la query para que sea más semánticamente similar a los textos de embedding
+        Genérico para TODOS los tipos de establecimientos
         
         Args:
             query: Query original del usuario
@@ -1102,28 +1139,130 @@ class PlacesVectorStore:
             # Convertir a minúsculas
             query = query.lower()
             
+            # Mapear consultas semánticas a características específicas (genérico para todos los establecimientos)
+            semantic_mappings = {
+                # Refrescarse/relajarse
+                'refrescarme': 'actividad acuática',
+                'relajarme': 'bienestar',
+                'nadar': 'actividad acuática',
+                'bañarme': 'actividad acuática',
+                'ejercitarme': 'actividad física',
+                'hacer ejercicio': 'actividad física',
+                'entrenar': 'actividad física',
+                
+                # Comer/beber
+                'comer': 'servicio restaurante',
+                'cenar': 'servicio restaurante',
+                'almorzar': 'servicio restaurante',
+                'desayunar': 'servicio desayuno',
+                'tomar algo': 'servicio bar',
+                'beber': 'servicio bar',
+                'cocteles': 'servicio bar',
+                
+                # Conectividad
+                'trabajar': 'conectividad',
+                'internet': 'conectividad',
+                'conectarme': 'conectividad',
+                'online': 'conectividad',
+                
+                # Estacionamiento
+                'estacionar': 'estacionamiento',
+                'parking': 'estacionamiento',
+                'aparcar': 'estacionamiento',
+                
+                # Experiencias
+                'romántico': 'experiencia romántico',
+                'familiar': 'experiencia familiar',
+                'negocios': 'experiencia negocios',
+                'lujo': 'nivel lujoso',
+                'económico': 'nivel económico',
+                'barato': 'nivel económico',
+                
+                # Horarios
+                '24 horas': 'disponibilidad continua',
+                'tarde': 'horario nocturno',
+                'noche': 'horario nocturno',
+                'madrugada': 'disponibilidad continua'
+            }
+            
             # Mapear términos comunes a términos más específicos
             query_improvements = {
                 'quiero': '',
                 'busco': '', 
                 'necesito': '',
-                'hotel con piscina': 'hotel piscina',
-                'hotel que tenga piscina': 'hotel piscina',
-                'hotel con gimnasio': 'hotel gimnasio',
-                'restaurante con terraza': 'restaurante terraza',
-                'lugar con wifi': 'wifi internet',
-                'hotel 24 horas': 'hotel 24 horas',
-                'restaurante abierto tarde': 'restaurante horario nocturno',
-                'lugar económico': 'económico barato',
-                'hotel de lujo': 'hotel lujo premium'
+                'con piscina': 'amenidad piscina palabra clave actividad acuática',
+                'que tenga piscina': 'amenidad piscina palabra clave actividad acuática',
+                'con gimnasio': 'amenidad gimnasio palabra clave actividad física',
+                'que tenga gimnasio': 'amenidad gimnasio palabra clave actividad física',
+                'con terraza': 'amenidad terraza palabra clave espacio exterior',
+                'con wifi': 'amenidad wifi palabra clave conectividad',
+                '24 horas': 'horario disponibilidad continua',
+                'abierto tarde': 'horario nocturno',
+                'económico': 'nivel económico',
+                'de lujo': 'nivel lujoso',
+                'con vista': 'amenidad vista exterior',
+                'con estacionamiento': 'amenidad estacionamiento'
             }
             
-            # Aplicar mejoras
+            # Aplicar mejoras específicas primero
             improved_query = query
             for original, improved in query_improvements.items():
                 if original in improved_query:
                     improved_query = improved_query.replace(original, improved)
                     break  # Solo aplicar una mejora
+            
+            # Si no se aplicó ninguna mejora específica, hacer mejoras semánticas
+            if improved_query == query:
+                # Buscar mapeos semánticos
+                semantic_features = []
+                for semantic_term, feature in semantic_mappings.items():
+                    if semantic_term in query:
+                        semantic_features.append(feature)
+                
+                # Aplicar mapeos semánticos
+                if semantic_features:
+                    # Detectar tipo de establecimiento en la query
+                    establecimiento_type = "lugar"  # por defecto
+                    if 'restaurante' in query:
+                        establecimiento_type = "restaurante"
+                    elif 'bar' in query:
+                        establecimiento_type = "bar"
+                    elif 'café' in query or 'cafe' in query:
+                        establecimiento_type = "café"
+                    elif 'centro comercial' in query:
+                        establecimiento_type = "centro comercial"
+                    elif 'museo' in query:
+                        establecimiento_type = "museo"
+                    elif 'parque' in query:
+                        establecimiento_type = "parque"
+                    elif 'hotel' in query:
+                        establecimiento_type = "hotel"
+                    elif 'discoteca' in query:
+                        establecimiento_type = "discoteca"
+                    elif 'cine' in query:
+                        establecimiento_type = "cine"
+                    elif 'spa' in query:
+                        establecimiento_type = "spa"
+                    elif 'gimnasio' in query:
+                        establecimiento_type = "gimnasio"
+                    
+                    improved_query = f"{establecimiento_type} amenidad {' amenidad '.join(semantic_features)} palabra clave {' palabra clave '.join(semantic_features)}"
+                
+                # Mejoras generales para características específicas
+                elif 'piscina' in query:
+                    improved_query = f"lugar amenidad piscina palabra clave actividad acuática"
+                elif 'gimnasio' in query:
+                    improved_query = f"lugar amenidad gimnasio palabra clave actividad física"
+                elif 'restaurante' in query:
+                    improved_query = f"restaurante servicio restaurante"
+                elif 'bar' in query:
+                    improved_query = f"bar servicio bar"
+                elif 'wifi' in query:
+                    improved_query = f"lugar amenidad wifi palabra clave conectividad"
+                elif 'estacionamiento' in query or 'parking' in query:
+                    improved_query = f"lugar amenidad estacionamiento"
+                elif 'terraza' in query:
+                    improved_query = f"lugar amenidad terraza palabra clave espacio exterior"
             
             # Limpiar espacios extra
             improved_query = ' '.join(improved_query.split())
@@ -1137,22 +1276,52 @@ class PlacesVectorStore:
             print(f"❌ Error al mejorar query: {e}")
             return query
     
-    def _get_similarity_threshold(self, query: str) -> float:
+    def _get_dynamic_threshold(self, query: str) -> float:
         """
-        Obtener umbral de similitud basado en el tipo de búsqueda
+        Obtener umbral dinámico basado en el tipo de consulta
+        Genérico para TODOS los tipos de establecimientos
         
         Args:
-            query: Query de búsqueda
+            query: Query del usuario
             
         Returns:
-            Umbral de similitud (0.0 a 1.0)
+            Umbral de similitud dinámico
         """
-        query_lower = query.lower()
-        
-        # Umbrales más permisivos para el enfoque simplificado
-        if 'hotel' in query_lower:
-            return 0.55  # Hoteles: más permisivo
-        elif 'restaurante' in query_lower:
-            return 0.52  # Restaurantes: más permisivo
-        else:
-            return 0.50  # General: más permisivo 
+        try:
+            query_lower = query.lower()
+            
+            # Búsquedas muy específicas (amenidades concretas)
+            if any(word in query_lower for word in ['piscina', 'gimnasio', 'spa', 'terraza', 'wifi', 'estacionamiento']):
+                return 0.42  # Muy permisivo para características específicas
+            
+            # Búsquedas por tipo de establecimiento
+            elif any(word in query_lower for word in ['restaurante', 'bar', 'café', 'cafe', 'discoteca', 'cine', 'museo', 'parque']):
+                return 0.50  # Permisivo para tipos específicos
+            
+            # Búsquedas por rating
+            elif any(word in query_lower for word in ['estrellas', 'rating', 'puntuacion', 'calificacion']):
+                return 0.45  # Permisivo para búsquedas por rating
+            
+            # Búsquedas por precio
+            elif any(word in query_lower for word in ['económico', 'barato', 'caro', 'lujo', 'precio']):
+                return 0.48  # Permisivo para búsquedas por precio
+            
+            # Búsquedas por experiencia
+            elif any(word in query_lower for word in ['romántico', 'familiar', 'negocios', 'trabajo', 'reunión']):
+                return 0.52  # Permisivo para experiencias específicas
+            
+            # Búsquedas por ubicación
+            elif any(word in query_lower for word in ['cerca', 'cerca de', 'ubicado', 'zona', 'área']):
+                return 0.55  # Más permisivo para ubicación
+            
+            # Búsquedas por horario
+            elif any(word in query_lower for word in ['24 horas', 'abierto', 'cerrado', 'tarde', 'noche']):
+                return 0.50  # Permisivo para horarios
+            
+            # Búsquedas genéricas
+            else:
+                return 0.65  # Umbral estándar para búsquedas genéricas
+                
+        except Exception as e:
+            logger.error(f"Error al calcular umbral dinámico: {e}")
+            return 0.65  # Umbral por defecto 
