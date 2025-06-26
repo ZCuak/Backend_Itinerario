@@ -1006,8 +1006,7 @@ def extract_search_criteria_from_message(user_message: str) -> dict:
         Extrae y devuelve SOLO un JSON válido con los siguientes campos (usa null si no se menciona):
         
         {{
-            "place_type": "tipo de lugar (ej: restaurante, hotel, bar, parque, centro comercial, museo)",
-            "category": "categoría específica (ej: restaurantes, hoteles, lugares_de_entretenimiento)",
+            "place_type": "tipo de lugar (debe ser uno de estos valores exactos en inglés: hotel, lodging, event_venue, restaurant, food, point_of_interest, establishment, bakery, coffee_shop, cafe, dessert_shop, confectionery, food_store, store, ice_cream_shop, hamburger_restaurant, american_restaurant, chinese_restaurant, bar, night_club, inn, casino, aquarium, beach, natural_feature, market, tourist_attraction, park, museum, church, place_of_worship, historical_landmark, amusement_park, amusement_center, historical_place, bar_and_grill, cafeteria, brunch_restaurant, home_goods_store, art_gallery, painter, shopping_mall, courier_service, supermarket, grocery_store, wholesaler, discount_store, department_store, clothing_store, sporting_goods_store, furniture_store, home_improvement_store, water_park, movie_theater)",
             "features": ["características mencionadas (ej: italiano, terraza, música en vivo)"],
             "rating_min": número mínimo de estrellas mencionado,
             "rating_max": número máximo de estrellas mencionado,
@@ -1018,25 +1017,24 @@ def extract_search_criteria_from_message(user_message: str) -> dict:
         }}
         
         Reglas importantes:
-        1. Si menciona "cafetería", "café", "coffee" → place_type: "cafetería", category: "restaurantes"
-        2. Si menciona "comer", "almorzar", "cenar" → intent: "comer"
-        3. Si menciona "dormir", "alojarse", "hospedarse" → intent: "dormir"
-        4. Si menciona "estrellas" o "rating" → extrae el número
-        5. Si menciona "abierto", "ahora", "actual" → opening_hours: "abierto_ahora"
-        6. Si menciona "24 horas" → opening_hours: "24_horas"
-        7. Si menciona "fines de semana" → opening_hours: "fines_semana"
-        8. Si menciona "lunes a viernes" → opening_hours: "lunes_viernes"
+        1. Si menciona "comer", "almorzar", "cenar" → intent: "comer"
+        2. Si menciona "dormir", "alojarse", "hospedarse" → intent: "dormir"
+        3. Si menciona "estrellas" o "rating" → extrae el número
+        4. Si menciona "abierto", "ahora", "actual" → opening_hours: "abierto_ahora"
+        5. Si menciona "24 horas" → opening_hours: "24_horas"
+        6. Si menciona "fines de semana" → opening_hours: "fines_semana"
+        7. Si menciona "lunes a viernes" → opening_hours: "lunes_viernes"
         
         Reglas específicas para precios (según rangos específicos):
-        9. Si menciona "gratis", "sin costo", "sin pago" → price_level: "gratis" (Nivel 0: 0.00 PEN)
-        10. Si menciona "barato", "económico", "accesible", "bajo" → price_level: "económico" (Nivel 1: 0.00-50.00 PEN)
-        11. Si menciona "moderado", "medio", "normal", "estándar" → price_level: "moderado" (Nivel 2: 50.00-150.00 PEN)
-        12. Si menciona "caro", "elevado", "alto" → price_level: "caro" (Nivel 3: 150.00-400.00 PEN)
-        13. Si menciona "muy caro", "lujoso", "exclusivo", "premium", "alta cocina", "estrellas michelin" → price_level: "muy caro" (Nivel 4: 400.00-1000.00 PEN)
-        14. Si menciona "nivel 1", "nivel 2", "nivel 3", "nivel 4" → extrae el número como price_level
-        15. Si menciona rangos específicos como "S/ 20-50", "50-150", "hasta 100" → incluir en features: ["precio S/ 20-50"]
-        16. Si menciona "no muy caro", "no caro", "económico" → price_level: "moderado"
-        17. Si menciona "de lujo", "exclusivo", "premium" → price_level: "muy caro"
+        8. Si menciona "gratis", "sin costo", "sin pago" → price_level: "gratis" (Nivel 0: 0.00 PEN)
+        9. Si menciona "barato", "económico", "accesible", "bajo" → price_level: "económico" (Nivel 1: 0.00-50.00 PEN)
+        10. Si menciona "moderado", "medio", "normal", "estándar" → price_level: "moderado" (Nivel 2: 50.00-150.00 PEN)
+        11. Si menciona "caro", "elevado", "alto" → price_level: "caro" (Nivel 3: 150.00-400.00 PEN)
+        12. Si menciona "muy caro", "lujoso", "exclusivo", "premium", "alta cocina", "estrellas michelin" → price_level: "muy caro" (Nivel 4: 400.00-1000.00 PEN)
+        13. Si menciona "nivel 1", "nivel 2", "nivel 3", "nivel 4" → extrae el número como price_level
+        14. Si menciona rangos específicos como "S/ 20-50", "50-150", "hasta 100" → incluir en features: ["precio S/ 20-50"]
+        15. Si menciona "no muy caro", "no caro", "económico" → price_level: "moderado"
+        16. Si menciona "de lujo", "exclusivo", "premium" → price_level: "muy caro"
         
         Ejemplos de mapeo de precios:
         - "restaurante barato" → price_level: "económico"
@@ -1074,9 +1072,6 @@ def extract_search_criteria_from_message(user_message: str) -> dict:
                 
                 if criteria.get('place_type'):
                     validated_criteria['place_type'] = criteria['place_type'].lower()
-                
-                if criteria.get('category'):
-                    validated_criteria['category'] = criteria['category']
                 
                 if criteria.get('features') and isinstance(criteria['features'], list):
                     validated_criteria['features'] = [f.lower() for f in criteria['features'] if f]
@@ -1180,16 +1175,6 @@ def process_natural_search(request):
                 top_k=5
             )
             search_method = "opening_hours"
-        
-        # Si tenemos categoría específica, usar búsqueda por categoría
-        elif search_criteria.get('category') and search_criteria.get('features'):
-            results = vector_store.find_places_by_category_and_features(
-                category=search_criteria['category'],
-                features=search_criteria['features'],
-                rating_min=search_criteria.get('rating_min'),
-                top_k=5
-            )
-            search_method = "category_and_features"
         
         # Si tenemos nivel de precios específico, usar búsqueda por precio
         elif search_criteria.get('price_level'):
