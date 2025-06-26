@@ -226,25 +226,70 @@ class NivelPrecio(models.Model):
         return f"Nivel {self.nivel}: {self.descripcion}"
 
 class LugarGooglePlaces(models.Model):
-    CATEGORIAS = [
-        ('restaurantes', 'Restaurantes'),
-        ('hoteles', 'Hoteles'),
-        ('lugares_acuaticos', 'Lugares Acuáticos'),
-        ('lugares_turisticos', 'Lugares Turísticos'),
-        ('discotecas', 'Discotecas'),
-        ('museos', 'Museos'),
-        ('lugares_campestres', 'Lugares Campestres'),
-        ('centros_comerciales', 'Centros Comerciales'),
-        ('lugares_de_entretenimiento', 'Lugares de Entretenimiento'),
+    # Tipos de establecimiento disponibles
+    TIPOS_ESTABLECIMIENTO = [
+        ('hotel', 'Hotel'),
+        ('restaurant', 'Restaurante'),
+        ('coffee_shop', 'Cafetería'),
+        ('chinese_restaurant', 'Restaurante Chino'),
+        ('bar', 'Bar'),
+        ('lodging', 'Alojamiento'),
+        ('aquarium', 'Acuario'),
+        ('beach', 'Playa'),
+        ('market', 'Mercado'),
+        ('park', 'Parque'),
+        ('museum', 'Museo'),
+        ('church', 'Iglesia'),
+        ('historical_landmark', 'Monumento Histórico'),
+        ('tourist_attraction', 'Atracción Turística'),
+        ('night_club', 'Club Nocturno'),
+        ('bar_and_grill', 'Bar y Parrilla'),
+        ('home_goods_store', 'Tienda de Hogar'),
+        ('art_gallery', 'Galería de Arte'),
+        ('shopping_mall', 'Centro Comercial'),
+        ('store', 'Tienda'),
+        ('supermarket', 'Supermercado'),
+        ('food_store', 'Tienda de Comida'),
+        ('discount_store', 'Tienda de Descuentos'),
+        ('department_store', 'Tienda por Departamentos'),
+        ('water_park', 'Parque Acuático'),
+        ('movie_theater', 'Cine'),
+        ('casino', 'Casino'),
+        ('amusement_park', 'Parque de Diversiones'),
+        ('amusement_center', 'Centro de Entretenimiento'),
+        ('event_venue', 'Lugar de Eventos'),
+        ('food', 'Comida'),
+        ('point_of_interest', 'Punto de Interés'),
+        ('establishment', 'Establecimiento'),
+        ('bakery', 'Panadería'),
+        ('cafe', 'Café'),
+        ('dessert_shop', 'Tienda de Postres'),
+        ('confectionery', 'Confitería'),
+        ('ice_cream_shop', 'Heladería'),
+        ('hamburger_restaurant', 'Restaurante de Hamburguesas'),
+        ('american_restaurant', 'Restaurante Americano'),
+        ('inn', 'Posada'),
+        ('natural_feature', 'Característica Natural'),
+        ('place_of_worship', 'Lugar de Culto'),
+        ('historical_place', 'Lugar Histórico'),
+        ('cafeteria', 'Cafetería'),
+        ('brunch_restaurant', 'Restaurante de Brunch'),
+        ('painter', 'Pintor'),
+        ('courier_service', 'Servicio de Mensajería'),
+        ('grocery_store', 'Tienda de Abarrotes'),
+        ('wholesaler', 'Mayorista'),
+        ('clothing_store', 'Tienda de Ropa'),
+        ('sporting_goods_store', 'Tienda Deportiva'),
+        ('furniture_store', 'Tienda de Muebles'),
+        ('home_improvement_store', 'Tienda de Mejoras para el Hogar'),
     ]
     
     # Campos básicos
     nombre = models.CharField(max_length=255)
     direccion = models.CharField(max_length=500)
-    tipo_principal = models.CharField(max_length=100)
-    tipos_adicionales = models.JSONField(default=list)
-    categoria = models.CharField(max_length=50, choices=CATEGORIAS)
-    place_id = models.CharField(max_length=100, blank=True, null=True)
+    tipo_principal = models.CharField(max_length=50, choices=TIPOS_ESTABLECIMIENTO)
+    tipos_adicionales = models.JSONField(default=list, help_text="Lista de tipos adicionales del establecimiento")
+    place_id = models.CharField(max_length=100, blank=True, null=True, unique=True)
     
     # Ubicación
     latitud = models.FloatField()
@@ -260,7 +305,7 @@ class LugarGooglePlaces(models.Model):
     
     # Precios y horarios
     nivel_precios = models.ForeignKey(NivelPrecio, on_delete=models.SET_NULL, null=True, blank=True)
-    horarios = models.JSONField(default=list)
+    horarios = models.JSONField(default=list, help_text="Horarios de operación por día")
     
     # Descripción
     descripcion = models.TextField(blank=True, null=True)
@@ -283,11 +328,56 @@ class LugarGooglePlaces(models.Model):
         db_table = 'lugar_google_places'
         unique_together = ('nombre', 'direccion', 'latitud', 'longitud')
         indexes = [
-            models.Index(fields=['categoria']),
+            models.Index(fields=['tipo_principal']),
             models.Index(fields=['latitud', 'longitud']),
             models.Index(fields=['rating']),
+            models.Index(fields=['place_id']),
         ]
 
     def __str__(self):
-        return f"{self.nombre} - {self.categoria}"
+        return f"{self.nombre} - {self.get_tipo_principal_display()}"
+    
+    def get_tipos_adicionales_display(self):
+        """Retorna los tipos adicionales formateados"""
+        if not self.tipos_adicionales:
+            return []
+        
+        tipos_formateados = []
+        for tipo in self.tipos_adicionales:
+            # Buscar el display name en las opciones
+            for codigo, nombre in self.TIPOS_ESTABLECIMIENTO:
+                if codigo == tipo:
+                    tipos_formateados.append(nombre)
+                    break
+            else:
+                # Si no se encuentra, usar el código original
+                tipos_formateados.append(tipo)
+        
+        return tipos_formateados
+    
+    def tiene_tipo(self, tipo_buscar):
+        """Verifica si el lugar tiene un tipo específico"""
+        if self.tipo_principal == tipo_buscar:
+            return True
+        return tipo_buscar in self.tipos_adicionales
+    
+    def es_hotel(self):
+        """Verifica si es un hotel"""
+        return self.tiene_tipo('hotel') or self.tiene_tipo('lodging') or self.tiene_tipo('inn')
+    
+    def es_restaurante(self):
+        """Verifica si es un restaurante"""
+        tipos_restaurante = [
+            'restaurant', 'chinese_restaurant', 'bar_and_grill', 
+            'hamburger_restaurant', 'american_restaurant', 'brunch_restaurant'
+        ]
+        return any(self.tiene_tipo(tipo) for tipo in tipos_restaurante)
+    
+    def es_bar(self):
+        """Verifica si es un bar"""
+        return self.tiene_tipo('bar') or self.tiene_tipo('night_club')
+    
+    def es_cafe(self):
+        """Verifica si es un café"""
+        return self.tiene_tipo('cafe') or self.tiene_tipo('coffee_shop') or self.tiene_tipo('cafeteria')
 
