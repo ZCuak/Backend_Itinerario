@@ -55,417 +55,97 @@ class PlacesEmbeddingGenerator:
             print(f"❌ Error al normalizar texto: {e}")
             return text if text else ""
     
-    def generate_place_text_for_embedding(self, lugar: LugarGooglePlaces) -> str:
+    def generate_text_for_embedding(self, lugar: 'LugarGooglePlaces') -> str:
         """
-        Generar texto optimizado para embedding usando múltiples campos estructurados
+        Generar texto optimizado para embeddings
+        Genérico para TODOS los tipos de establecimientos
         
         Args:
-            lugar: Instancia de LugarGooglePlaces
+            lugar: Instancia del modelo LugarGooglePlaces
             
         Returns:
-            Texto formateado para generar embedding
+            Texto optimizado para generar embeddings
         """
         try:
+            # Obtener características extraídas
+            caracteristicas = lugar.caracteristicas_extraidas or {}
+            
+            # Construir texto optimizado
             text_parts = []
             
-            # 1. Información básica del lugar
+            # 1. Nombre del lugar (máximo peso)
             if lugar.nombre:
-                text_parts.append(f"establecimiento {lugar.nombre}")
+                text_parts.append(f"nombre: {lugar.nombre}")
             
-            # 2. Traducir tipo principal de inglés a español
-            tipo_principal_es = self._translate_place_type(lugar.tipo_principal)
-            if tipo_principal_es:
-                text_parts.append(f"tipo {tipo_principal_es}")
+            # 2. Tipo de establecimiento (solo tipo_principal)
+            tipo = getattr(lugar, 'tipo_principal', None)
+            if tipo:
+                text_parts.append(f"tipo: {tipo}")
             
-            # 3. Categoría
-            if lugar.categoria:
-                text_parts.append(f"categoría {lugar.categoria}")
+            # 3. Características extraídas (máximo peso)
+            if caracteristicas:
+                # Amenidades
+                if 'amenidades' in caracteristicas and caracteristicas['amenidades']:
+                    amenidades_text = ' '.join(caracteristicas['amenidades'])
+                    text_parts.append(f"amenidad {amenidades_text}")
+                
+                # Servicios
+                if 'servicios' in caracteristicas and caracteristicas['servicios']:
+                    servicios_text = ' '.join(caracteristicas['servicios'])
+                    text_parts.append(f"servicio {servicios_text}")
+                
+                # Tipo de experiencia
+                if 'tipo_experiencia' in caracteristicas and caracteristicas['tipo_experiencia']:
+                    experiencia_text = ' '.join(caracteristicas['tipo_experiencia'])
+                    text_parts.append(f"experiencia {experiencia_text}")
+                
+                # Nivel de lujo
+                if 'nivel_lujo' in caracteristicas and caracteristicas['nivel_lujo']:
+                    lujo_text = ' '.join(caracteristicas['nivel_lujo'])
+                    text_parts.append(f"nivel {lujo_text}")
+                
+                # Público objetivo
+                if 'publico_objetivo' in caracteristicas and caracteristicas['publico_objetivo']:
+                    publico_text = ' '.join(caracteristicas['publico_objetivo'])
+                    text_parts.append(f"publico {publico_text}")
+                
+                # Palabras clave (máximo peso)
+                if 'palabras_clave' in caracteristicas and caracteristicas['palabras_clave']:
+                    palabras_text = ' '.join(caracteristicas['palabras_clave'])
+                    text_parts.append(f"palabra clave {palabras_text}")
             
-            # 4. Traducir tipos adicionales de inglés a español
-            tipos_adicionales_es = self._translate_additional_types(lugar.tipos_adicionales)
-            for tipo in tipos_adicionales_es[:3]:  # Máximo 3 tipos adicionales
-                text_parts.append(f"característica {tipo}")
-            
-            # 5. Ubicación (solo dirección, no coordenadas)
-            if lugar.direccion:
-                text_parts.append(f"ubicación {lugar.direccion}")
-            
-            # 6. Calificaciones
-            if lugar.rating and lugar.rating > 0:
-                text_parts.append(f"rating {lugar.rating} estrellas")
-                if lugar.total_ratings and lugar.total_ratings > 0:
-                    text_parts.append(f"con {lugar.total_ratings} reseñas")
-            
-            # 7. Información de precios
-            if lugar.nivel_precios:
-                text_parts.append(f"precio {lugar.nivel_precios.descripcion}")
-                if lugar.nivel_precios.rango_inferior and lugar.nivel_precios.rango_superior:
-                    text_parts.append(f"rango precio {lugar.nivel_precios.rango_inferior} a {lugar.nivel_precios.rango_superior} {lugar.nivel_precios.moneda}")
-            
-            # 8. Horarios (procesados y simplificados)
-            horarios_info = self._extract_horarios_info(lugar.horarios)
-            if horarios_info:
-                text_parts.append(f"horarios {horarios_info}")
-            
-            # 9. Estado del negocio
-            if lugar.estado_negocio and lugar.estado_negocio != 'OPERATIONAL':
-                estado_es = self._translate_business_status(lugar.estado_negocio)
-                text_parts.append(f"estado {estado_es}")
-            
-            # 10. Descripción original (si existe y es diferente del resumen IA)
-            if lugar.descripcion and lugar.descripcion != lugar.resumen_ia and lugar.descripcion != 'No hay descripción disponible':
-                desc_short = lugar.descripcion[:150] if len(lugar.descripcion) > 150 else lugar.descripcion
-                text_parts.append(f"descripción {desc_short}")
-            
-            # 11. Resumen de IA (limitado y procesado)
+            # 4. Resumen IA (peso medio)
             if lugar.resumen_ia:
-                resumen_processed = self._process_resumen_ia(lugar.resumen_ia)
-                if resumen_processed:
-                    text_parts.append(f"resumen {resumen_processed}")
+                # Limitar el resumen para evitar que domine el embedding
+                resumen_short = lugar.resumen_ia[:200] if len(lugar.resumen_ia) > 200 else lugar.resumen_ia
+                text_parts.append(f"descripcion: {resumen_short}")
+            
+            # 5. Dirección (peso bajo)
+            if lugar.direccion:
+                text_parts.append(f"ubicacion: {lugar.direccion}")
+            
+            # 6. Nivel de precios (peso bajo)
+            if hasattr(lugar, 'nivel_precios') and lugar.nivel_precios:
+                text_parts.append(f"precio: {lugar.nivel_precios}")
             
             # Combinar todas las partes
             final_text = " ".join(text_parts)
             
-            # Normalizar y limpiar
-            normalized_text = self._normalize_text(final_text)
+            # Limpiar espacios extra y normalizar
+            final_text = " ".join(final_text.split())
             
-            print(f"📝 Texto optimizado para lugar {lugar.id}: {normalized_text[:150]}...")
-            return normalized_text
-        
-        except Exception as e:
-            print(f"❌ Error al generar texto para lugar {lugar.id}: {e}")
-            # Fallback: usar solo el nombre y tipo principal
-            fallback_text = f"establecimiento {lugar.nombre}"
-            if lugar.tipo_principal:
-                tipo_es = self._translate_place_type(lugar.tipo_principal)
-                fallback_text += f" tipo {tipo_es}"
-            return fallback_text
-
-    def _translate_place_type(self, tipo_principal: str) -> str:
-        """
-        Traducir tipo principal de inglés a español
-        """
-        try:
-            if not tipo_principal:
-                return ""
-            
-            # Mapeo de tipos principales
-            type_mapping = {
-                # Restaurantes
-                'restaurant': 'restaurante',
-                'cafe': 'cafetería',
-                'bar': 'bar',
-                'bakery': 'panadería',
-                'meal_delivery': 'entrega de comida',
-                'meal_takeaway': 'comida para llevar',
-                
-                # Hoteles
-                'hotel': 'hotel',
-                'lodging': 'alojamiento',
-                'guest_house': 'casa de huéspedes',
-                'hostel': 'hostal',
-                'bed_and_breakfast': 'bed and breakfast',
-                'campground': 'camping',
-                'rv_park': 'parque para caravanas',
-                
-                # Lugares acuáticos
-                'beach': 'playa',
-                'aquarium': 'acuario',
-                
-                # Lugares turísticos
-                'tourist_attraction': 'atracción turística',
-                
-                # Entretenimiento
-                'night_club': 'discoteca',
-                'movie_theater': 'cine',
-                'amusement_park': 'parque de diversiones',
-                'bowling_alley': 'bolera',
-                'casino': 'casino',
-                
-                # Museos
-                'museum': 'museo',
-                'art_gallery': 'galería de arte',
-                
-                # Lugares campestres
-                'park': 'parque',
-                'natural_feature': 'atractivo natural',
-                
-                # Centros comerciales
-                'shopping_mall': 'centro comercial',
-                'department_store': 'tienda por departamentos',
-                'store': 'tienda',
-                'supermarket': 'supermercado',
-                'clothing_store': 'tienda de ropa',
-                'jewelry_store': 'joyería',
-                'convenience_store': 'tienda de conveniencia',
-                'electronics_store': 'tienda de electrónicos',
-                
-                # Otros
-                'point_of_interest': 'punto de interés',
-                'establishment': 'establecimiento',
-                'food': 'comida',
-                'event_venue': 'lugar de eventos'
-            }
-            
-            return type_mapping.get(tipo_principal.lower(), tipo_principal.lower())
+            return final_text
             
         except Exception as e:
-            print(f"❌ Error al traducir tipo principal: {e}")
-            return tipo_principal.lower() if tipo_principal else ""
+            logger.error(f"Error al generar texto para embedding: {e}")
+            # Fallback: usar solo nombre y resumen
+            fallback_parts = []
+            if lugar.nombre:
+                fallback_parts.append(lugar.nombre)
+            if lugar.resumen_ia:
+                fallback_parts.append(lugar.resumen_ia[:300])
+            return " ".join(fallback_parts) if fallback_parts else "lugar"
 
-    def _translate_additional_types(self, tipos_adicionales) -> List[str]:
-        """
-        Traducir tipos adicionales de inglés a español
-        """
-        try:
-            if not tipos_adicionales:
-                return []
-            
-            # Si es string, intentar parsear como JSON
-            if isinstance(tipos_adicionales, str):
-                try:
-                    import json
-                    tipos_adicionales = json.loads(tipos_adicionales)
-                except:
-                    # Si no es JSON válido, dividir por comas
-                    tipos_adicionales = [t.strip().strip('"[]') for t in tipos_adicionales.split(',')]
-            
-            # Mapeo de tipos adicionales (más específicos)
-            additional_type_mapping = {
-                # Restaurantes
-                'restaurant': 'restaurante',
-                'cafe': 'cafetería',
-                'bar': 'bar',
-                'bakery': 'panadería',
-                'meal_delivery': 'entrega de comida',
-                'meal_takeaway': 'comida para llevar',
-                'food': 'comida',
-                
-                # Hoteles
-                'hotel': 'hotel',
-                'lodging': 'alojamiento',
-                'guest_house': 'casa de huéspedes',
-                'hostel': 'hostal',
-                'bed_and_breakfast': 'bed and breakfast',
-                'campground': 'camping',
-                'rv_park': 'parque para caravanas',
-                
-                # Amenidades de hoteles
-                'gym': 'gimnasio',
-                'fitness_center': 'centro de fitness',
-                'pool': 'piscina',
-                'spa': 'spa',
-                'restaurant': 'restaurante',
-                'bar': 'bar',
-                'wifi': 'wifi',
-                'internet': 'internet',
-                'parking': 'estacionamiento',
-                'concierge': 'conserjería',
-                'room_service': 'servicio a la habitación',
-                
-                # Lugares acuáticos
-                'beach': 'playa',
-                'aquarium': 'acuario',
-                'water_park': 'parque acuático',
-                
-                # Lugares turísticos
-                'tourist_attraction': 'atracción turística',
-                'landmark': 'monumento',
-                'historic': 'histórico',
-                'cultural': 'cultural',
-                
-                # Entretenimiento
-                'night_club': 'discoteca',
-                'movie_theater': 'cine',
-                'amusement_park': 'parque de diversiones',
-                'bowling_alley': 'bolera',
-                'casino': 'casino',
-                'entertainment': 'entretenimiento',
-                
-                # Museos
-                'museum': 'museo',
-                'art_gallery': 'galería de arte',
-                'exhibit': 'exhibición',
-                
-                # Lugares campestres
-                'park': 'parque',
-                'natural_feature': 'atractivo natural',
-                'outdoor': 'aire libre',
-                'recreation': 'recreación',
-                
-                # Centros comerciales
-                'shopping_mall': 'centro comercial',
-                'department_store': 'tienda por departamentos',
-                'store': 'tienda',
-                'supermarket': 'supermercado',
-                'clothing_store': 'tienda de ropa',
-                'jewelry_store': 'joyería',
-                'convenience_store': 'tienda de conveniencia',
-                'electronics_store': 'tienda de electrónicos',
-                'shopping': 'compras',
-                'retail': 'minorista',
-                
-                # Otros
-                'point_of_interest': 'punto de interés',
-                'establishment': 'establecimiento',
-                'business': 'negocio',
-                'service': 'servicio'
-            }
-            
-            tipos_traducidos = []
-            for tipo in tipos_adicionales:
-                if isinstance(tipo, str):
-                    tipo_clean = tipo.strip().strip('"[]')
-                    tipo_traducido = additional_type_mapping.get(tipo_clean.lower(), tipo_clean.lower())
-                    if tipo_traducido and tipo_traducido not in tipos_traducidos:
-                        tipos_traducidos.append(tipo_traducido)
-            
-            return tipos_traducidos
-            
-        except Exception as e:
-            print(f"❌ Error al traducir tipos adicionales: {e}")
-            return []
-
-    def _extract_horarios_info(self, horarios) -> str:
-        """
-        Extraer información útil de los horarios
-        """
-        try:
-            if not horarios:
-                return ""
-            
-            # Si es string, intentar parsear como JSON
-            if isinstance(horarios, str):
-                try:
-                    import json
-                    horarios = json.loads(horarios)
-                except:
-                    return ""
-            
-            if not isinstance(horarios, list):
-                return ""
-            
-            # Analizar patrones de horarios
-            horarios_info = []
-            
-            # Verificar si está abierto 24 horas
-            if self._is_24_hours(horarios):
-                return "abierto 24 horas"
-            
-            # Verificar si está abierto fines de semana
-            if self._is_weekend_open(horarios):
-                horarios_info.append("abierto fines de semana")
-            
-            # Verificar si está abierto lunes a viernes
-            if self._is_weekday_open(horarios):
-                horarios_info.append("abierto lunes a viernes")
-            
-            # Extraer horario típico
-            horario_tipico = self._extract_typical_hours(horarios)
-            if horario_tipico:
-                horarios_info.append(horario_tipico)
-            
-            return " ".join(horarios_info) if horarios_info else ""
-            
-        except Exception as e:
-            print(f"❌ Error al extraer horarios: {e}")
-            return ""
-
-    def _is_24_hours(self, horarios: List[str]) -> bool:
-        """Verificar si está abierto 24 horas"""
-        try:
-            for horario in horarios:
-                if isinstance(horario, str) and "24 horas" in horario.lower():
-                    return True
-            return False
-        except:
-            return False
-
-    def _is_weekend_open(self, horarios: List[str]) -> bool:
-        """Verificar si está abierto fines de semana"""
-        try:
-            weekend_days = ['sábado', 'domingo', 'saturday', 'sunday']
-            for horario in horarios:
-                if isinstance(horario, str):
-                    if any(dia in horario.lower() for dia in weekend_days):
-                        return True
-            return False
-        except:
-            return False
-
-    def _is_weekday_open(self, horarios: List[str]) -> bool:
-        """Verificar si está abierto lunes a viernes"""
-        try:
-            weekday_days = ['lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday']
-            for horario in horarios:
-                if isinstance(horario, str):
-                    if any(dia in horario.lower() for dia in weekday_days):
-                        return True
-            return False
-        except:
-            return False
-
-    def _extract_typical_hours(self, horarios: List[str]) -> str:
-        """Extraer horario típico"""
-        try:
-            for horario in horarios:
-                if isinstance(horario, str):
-                    # Buscar patrones de horario como "8:00-23:00"
-                    import re
-                    time_pattern = r'(\d{1,2}:\d{2}).*?(\d{1,2}:\d{2})'
-                    match = re.search(time_pattern, horario)
-                    if match:
-                        return f"horario {match.group(1)} a {match.group(2)}"
-            return ""
-        except:
-            return ""
-
-    def _translate_business_status(self, status: str) -> str:
-        """
-        Traducir estado del negocio
-        """
-        try:
-            status_mapping = {
-                'OPERATIONAL': 'operativo',
-                'CLOSED_TEMPORARILY': 'cerrado temporalmente',
-                'CLOSED_PERMANENTLY': 'cerrado permanentemente',
-                'OPENING_SOON': 'abriendo pronto'
-            }
-            return status_mapping.get(status, status.lower())
-        except:
-            return status.lower() if status else ""
-
-    def _process_resumen_ia(self, resumen_ia: str) -> str:
-        """
-        Procesar y limitar el resumen de IA para evitar textos muy largos
-        """
-        try:
-            if not resumen_ia:
-                return ""
-            
-            # Limitar longitud máxima
-            max_length = 300
-            if len(resumen_ia) <= max_length:
-                return resumen_ia
-            
-            # Truncar inteligentemente
-            truncated = resumen_ia[:max_length]
-            
-            # Buscar el último punto o coma para cortar en una frase completa
-            last_period = truncated.rfind('.')
-            last_comma = truncated.rfind(',')
-            
-            if last_period > max_length * 0.7:  # Si hay un punto en el último 30%
-                return truncated[:last_period + 1]
-            elif last_comma > max_length * 0.8:  # Si hay una coma en el último 20%
-                return truncated[:last_comma + 1]
-            else:
-                return truncated + "..."
-                
-        except Exception as e:
-            print(f"❌ Error al procesar resumen IA: {e}")
-            return resumen_ia[:200] if resumen_ia else ""
-    
     def get_place_embedding(self, lugar: LugarGooglePlaces) -> List[float]:
         """
         Generar embedding para un lugar específico
@@ -478,7 +158,7 @@ class PlacesEmbeddingGenerator:
         """
         try:
             # Generar texto optimizado para el lugar
-            place_text = self.generate_place_text_for_embedding(lugar)
+            place_text = self.generate_text_for_embedding(lugar)
             
             # Generar embedding
             embedding = self.embeddings.get_embedding(place_text)
@@ -507,7 +187,7 @@ class PlacesEmbeddingGenerator:
             # Generar textos para todos los lugares
             place_texts = []
             for lugar in lugares:
-                text = self.generate_place_text_for_embedding(lugar)
+                text = self.generate_text_for_embedding(lugar)
                 place_texts.append(text)
             
             # Generar embeddings en lote
@@ -550,7 +230,7 @@ class PlacesEmbeddingGenerator:
                 similarities.append({
                     'lugar': lugares[i],
                     'score': similarity,
-                    'text': self.generate_place_text_for_embedding(lugares[i])
+                    'text': self.generate_text_for_embedding(lugares[i])
                 })
             
             # Ordenar por similitud (mayor a menor)
@@ -595,43 +275,6 @@ class PlacesEmbeddingGenerator:
         
         except Exception as e:
             logger.error(f"Error al buscar lugares por características: {e}")
-            raise
-    
-    def find_hotels_with_amenities(self, amenities: List[str], lugares: List[LugarGooglePlaces], 
-                                  top_k: int = 5) -> List[Dict[str, Any]]:
-        """
-        Buscar hoteles con amenidades específicas
-        
-        Args:
-            amenities: Lista de amenidades (ej: ['gimnasio', 'piscina', 'spa'])
-            lugares: Lista de lugares a buscar
-            top_k: Número máximo de resultados
-            
-        Returns:
-            Lista de hoteles que tienen las amenidades
-        """
-        try:
-            # Filtrar solo hoteles
-            hoteles = [lugar for lugar in lugares if 'hotel' in lugar.tipo_principal.lower() 
-                      or 'lodging' in lugar.tipo_principal.lower()]
-            
-            if not hoteles:
-                logger.warning("No se encontraron hoteles en la lista de lugares")
-                return []
-            
-            # Buscar hoteles con las amenidades
-            query = f"Hotel con {' y '.join(amenities)}"
-            results = self.search_similar_places(query, hoteles, top_k)
-            
-            # Filtrar por umbral de similitud
-            threshold = 0.4  # Umbral específico para hoteles
-            filtered_results = [r for r in results if r['score'] >= threshold]
-            
-            logger.info(f"Encontrados {len(filtered_results)} hoteles con amenidades: {amenities}")
-            return filtered_results
-        
-        except Exception as e:
-            logger.error(f"Error al buscar hoteles con amenidades: {e}")
             raise
     
     def get_place_metadata(self, lugar: LugarGooglePlaces) -> Dict[str, Any]:

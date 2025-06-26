@@ -176,50 +176,41 @@ def search_places(request):
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 @api_view(['GET'])
-# @permission_classes([IsAuthenticated])  # Temporalmente deshabilitado
-def find_hotels_with_amenities(request):
+def find_places_with_amenities(request):
     """
-    Buscar hoteles con amenidades específicas
+    Buscar lugares con amenidades específicas (genérico para todos los tipos)
     
-    GET /api/pinecone/places/hotels-with-amenities/?amenities=gimnasio,piscina&top_k=5
+    GET /api/pinecone/places/places-with-amenities/?amenities=gimnasio,piscina&place_type=hotel&top_k=5
     """
     try:
-        amenities_str = request.GET.get('amenities', '').strip()
+        # Obtener parámetros
+        amenities = request.GET.get('amenities', '').split(',')
+        amenities = [a.strip() for a in amenities if a.strip()]
+        
+        place_type = request.GET.get('place_type', None)
         top_k = int(request.GET.get('top_k', 5))
-        
-        if not amenities_str:
-            return Response({
-                'error': 'amenities es requerido (separado por comas)'
-            }, status=status.HTTP_400_BAD_REQUEST)
-        
-        # Parsear amenidades
-        amenities = [amenity.strip() for amenity in amenities_str.split(',') if amenity.strip()]
         
         if not amenities:
             return Response({
-                'error': 'Debe proporcionar al menos una amenidad'
-            }, status=status.HTTP_400_BAD_REQUEST)
+                'error': 'Debe especificar al menos una amenidad'
+            }, status=400)
         
-        # Buscar hoteles con amenidades
-        vector_store = get_places_vector_store()
-        results = vector_store.find_hotels_with_amenities(amenities, top_k=top_k)
+        # Buscar lugares con amenidades
+        vector_store = PlacesVectorStore()
+        results = vector_store.find_places_with_amenities(amenities, place_type=place_type, top_k=top_k)
         
         return Response({
-            'success': True,
-            'amenities': amenities,
             'results': results,
-            'total_results': len(results)
-        }, status=status.HTTP_200_OK)
-    
-    except ValueError as e:
-        return Response({
-            'error': 'Parámetros inválidos'
-        }, status=status.HTTP_400_BAD_REQUEST)
+            'count': len(results),
+            'amenities': amenities,
+            'place_type': place_type
+        })
+        
     except Exception as e:
-        logger.error(f"Error al buscar hoteles con amenidades: {e}")
+        logger.error(f"Error al buscar lugares con amenidades: {e}")
         return Response({
-            'error': 'Error interno del servidor'
-        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            'error': f'Error interno del servidor: {str(e)}'
+        }, status=500)
 
 @api_view(['GET'])
 # @permission_classes([IsAuthenticated])  # Temporalmente deshabilitado
@@ -379,89 +370,112 @@ def search_places_by_type_and_features(request):
         }, status=500)
 
 @api_view(['POST'])
-# @permission_classes([IsAuthenticated])  # Temporalmente deshabilitado
-def search_places_with_rating_and_features(request):
+def search_places_with_rating_and_amenities(request):
     """
-    Buscar lugares con rating específico y características
+    Buscar lugares con rating específico y amenidades (genérico para todos los tipos)
     
-    POST /api/pinecone/places/search-with-rating-and-features/
-    {
-        "place_type": "restaurante",
-        "rating": 4.0,
-        "features": ["italiano", "terraza"],
-        "rating_tolerance": 0.5,
-        "top_k": 5
-    }
+    POST /api/pinecone/places/search_places_with_rating_and_amenities/
     """
     try:
-        # Validar datos de entrada
-        place_type = request.data.get('place_type')
+        # Obtener datos del request
         rating = request.data.get('rating')
-        features = request.data.get('features', [])
-        rating_tolerance = request.data.get('rating_tolerance', 0.5)
+        amenities = request.data.get('amenities', [])
+        place_type = request.data.get('place_type', None)
         top_k = request.data.get('top_k', 5)
         
-        if not place_type:
+        # Validar parámetros
+        if rating is None:
             return Response({
-                'error': 'El tipo de lugar es requerido'
+                'error': 'El rating es requerido'
             }, status=400)
         
-        if not rating or not isinstance(rating, (int, float)):
+        if not isinstance(rating, (int, float)) or rating < 0 or rating > 5:
             return Response({
-                'error': 'El rating es requerido y debe ser un número'
+                'error': 'El rating debe ser un número entre 0 y 5'
             }, status=400)
         
-        if not features or not isinstance(features, list):
+        if not amenities:
             return Response({
-                'error': 'Las características son requeridas y deben ser una lista'
+                'error': 'Debe especificar al menos una amenidad'
             }, status=400)
         
-        # Realizar búsqueda
+        # Buscar lugares con rating y amenidades
         vector_store = PlacesVectorStore()
-        results = vector_store.find_places_with_rating_and_features(
+        results = vector_store.find_places_with_rating_and_amenities(
+            rating=rating,
+            amenities=amenities,
             place_type=place_type,
-            rating=float(rating),
-            features=features,
-            rating_tolerance=float(rating_tolerance),
-            top_k=int(top_k)
+            top_k=top_k
         )
         
-        # Formatear resultados
-        formatted_results = []
-        for result in results:
-            metadata = result['metadata']
-            formatted_results.append({
-                'id': metadata.get('id'),
-                'nombre': metadata.get('nombre'),
-                'tipo_principal': metadata.get('tipo_principal'),
-                'tipos_adicionales': metadata.get('tipos_adicionales'),
-                'categoria': metadata.get('categoria'),
-                'rating': metadata.get('rating'),
-                'nivel_precios': metadata.get('nivel_precios'),
-                'direccion': metadata.get('direccion'),
-                'resumen_ia': metadata.get('resumen_ia'),
-                'descripcion': metadata.get('descripcion'),
-                'horarios': metadata.get('horarios'),
-                'score': result['score'],
-                'vector_id': result['id']
-            })
+        return Response({
+            'results': results,
+            'count': len(results),
+            'rating': rating,
+            'amenities': amenities,
+            'place_type': place_type
+        })
+        
+    except Exception as e:
+        logger.error(f"Error en búsqueda de lugares con rating y amenidades: {e}")
+        return Response({
+            'error': f'Error interno del servidor: {str(e)}'
+        }, status=500)
+
+@api_view(['POST'])
+def search_places_by_rating_range(request):
+    """
+    Buscar lugares en un rango de rating específico (genérico para todos los tipos)
+    
+    POST /api/pinecone/places/search_places_by_rating_range/
+    """
+    try:
+        # Obtener datos del request
+        min_rating = request.data.get('min_rating')
+        max_rating = request.data.get('max_rating')
+        amenities = request.data.get('amenities', [])
+        place_type = request.data.get('place_type', None)
+        top_k = request.data.get('top_k', 5)
+        
+        # Validar parámetros
+        if min_rating is None or max_rating is None:
+            return Response({
+                'error': 'min_rating y max_rating son requeridos'
+            }, status=400)
+        
+        if not isinstance(min_rating, (int, float)) or not isinstance(max_rating, (int, float)):
+            return Response({
+                'error': 'Los ratings deben ser números'
+            }, status=400)
+        
+        if min_rating < 0 or max_rating > 5 or min_rating > max_rating:
+            return Response({
+                'error': 'Los ratings deben estar entre 0 y 5, y min_rating debe ser menor que max_rating'
+            }, status=400)
+        
+        # Buscar lugares por rango de rating
+        vector_store = PlacesVectorStore()
+        results = vector_store.find_places_by_rating_range(
+            min_rating=min_rating,
+            max_rating=max_rating,
+            amenities=amenities if amenities else None,
+            place_type=place_type,
+            top_k=top_k
+        )
         
         return Response({
-            'success': True,
-            'query': {
-                'place_type': place_type,
-                'rating': rating,
-                'features': features,
-                'rating_tolerance': rating_tolerance
-            },
-            'total_results': len(formatted_results),
-            'results': formatted_results
+            'results': results,
+            'count': len(results),
+            'min_rating': min_rating,
+            'max_rating': max_rating,
+            'amenities': amenities,
+            'place_type': place_type
         })
-    
+        
     except Exception as e:
-        logger.error(f"Error en búsqueda con rating y características: {e}")
+        logger.error(f"Error en búsqueda de lugares por rango de rating: {e}")
         return Response({
-            'error': f'Error en la búsqueda: {str(e)}'
+            'error': f'Error interno del servidor: {str(e)}'
         }, status=500)
 
 @api_view(['POST'])
@@ -750,161 +764,6 @@ def clear_places_index(request):
         return Response({
             'error': 'Error interno del servidor'
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-
-@api_view(['POST'])
-# @permission_classes([IsAuthenticated])  # Temporalmente deshabilitado
-def search_hotels_with_rating_and_amenities(request):
-    """
-    Buscar hoteles con rating específico y amenidades
-    
-    POST /api/pinecone/places/search_hotels_with_rating_and_amenities/
-    {
-        "rating": 3.0,
-        "amenities": ["restaurante", "gimnasio"],
-        "rating_tolerance": 0.5,
-        "top_k": 5
-    }
-    """
-    try:
-        # Validar datos de entrada
-        rating = request.data.get('rating')
-        amenities = request.data.get('amenities', [])
-        rating_tolerance = request.data.get('rating_tolerance', 0.5)
-        top_k = request.data.get('top_k', 5)
-        
-        if not rating or not isinstance(rating, (int, float)):
-            return Response({
-                'error': 'El rating es requerido y debe ser un número'
-            }, status=400)
-        
-        if not amenities or not isinstance(amenities, list):
-            return Response({
-                'error': 'Las amenidades son requeridas y deben ser una lista'
-            }, status=400)
-        
-        # Realizar búsqueda
-        vector_store = PlacesVectorStore()
-        results = vector_store.find_hotels_with_rating_and_amenities(
-            rating=float(rating),
-            amenities=amenities,
-            rating_tolerance=float(rating_tolerance),
-            top_k=int(top_k)
-        )
-        
-        # Formatear resultados
-        formatted_results = []
-        for result in results:
-            metadata = result['metadata']
-            formatted_results.append({
-                'id': metadata.get('id'),
-                'nombre': metadata.get('nombre'),
-                'tipo_principal': metadata.get('tipo_principal'),
-                'rating': metadata.get('rating'),
-                'total_ratings': metadata.get('total_ratings'),
-                'nivel_precios': metadata.get('nivel_precios'),
-                'direccion': metadata.get('direccion'),
-                'resumen_ia': metadata.get('resumen_ia'),
-                'descripcion': metadata.get('descripcion'),
-                'score': result['score'],
-                'vector_id': result['id']
-            })
-        
-        return Response({
-            'success': True,
-            'query': {
-                'rating': rating,
-                'amenities': amenities,
-                'rating_tolerance': rating_tolerance
-            },
-            'total_results': len(formatted_results),
-            'results': formatted_results
-        })
-    
-    except Exception as e:
-        logger.error(f"Error en búsqueda de hoteles con rating y amenidades: {e}")
-        return Response({
-            'error': f'Error en la búsqueda: {str(e)}'
-        }, status=500)
-
-@api_view(['POST'])
-# @permission_classes([IsAuthenticated])  # Temporalmente deshabilitado
-def search_hotels_by_rating_range(request):
-    """
-    Buscar hoteles en un rango de rating específico
-    
-    POST /api/pinecone/places/search_hotels_by_rating_range/
-    {
-        "min_rating": 3.0,
-        "max_rating": 4.0,
-        "amenities": ["restaurante"],
-        "top_k": 5
-    }
-    """
-    try:
-        # Validar datos de entrada
-        min_rating = request.data.get('min_rating')
-        max_rating = request.data.get('max_rating')
-        amenities = request.data.get('amenities')
-        top_k = request.data.get('top_k', 5)
-        
-        if not min_rating or not isinstance(min_rating, (int, float)):
-            return Response({
-                'error': 'El rating mínimo es requerido y debe ser un número'
-            }, status=400)
-        
-        if not max_rating or not isinstance(max_rating, (int, float)):
-            return Response({
-                'error': 'El rating máximo es requerido y debe ser un número'
-            }, status=400)
-        
-        if float(min_rating) > float(max_rating):
-            return Response({
-                'error': 'El rating mínimo no puede ser mayor al rating máximo'
-            }, status=400)
-        
-        # Realizar búsqueda
-        vector_store = PlacesVectorStore()
-        results = vector_store.find_hotels_by_rating_range(
-            min_rating=float(min_rating),
-            max_rating=float(max_rating),
-            amenities=amenities,
-            top_k=int(top_k)
-        )
-        
-        # Formatear resultados
-        formatted_results = []
-        for result in results:
-            metadata = result['metadata']
-            formatted_results.append({
-                'id': metadata.get('id'),
-                'nombre': metadata.get('nombre'),
-                'tipo_principal': metadata.get('tipo_principal'),
-                'rating': metadata.get('rating'),
-                'total_ratings': metadata.get('total_ratings'),
-                'nivel_precios': metadata.get('nivel_precios'),
-                'direccion': metadata.get('direccion'),
-                'resumen_ia': metadata.get('resumen_ia'),
-                'descripcion': metadata.get('descripcion'),
-                'score': result['score'],
-                'vector_id': result['id']
-            })
-        
-        return Response({
-            'success': True,
-            'query': {
-                'min_rating': min_rating,
-                'max_rating': max_rating,
-                'amenities': amenities
-            },
-            'total_results': len(formatted_results),
-            'results': formatted_results
-        })
-    
-    except Exception as e:
-        logger.error(f"Error en búsqueda de hoteles por rango de rating: {e}")
-        return Response({
-            'error': f'Error en la búsqueda: {str(e)}'
-        }, status=500)
 
 @api_view(['POST'])
 # @permission_classes([IsAuthenticated])  # Temporalmente deshabilitado
@@ -1227,4 +1086,131 @@ def process_natural_search(request):
         logger.error(f"Error en procesamiento de búsqueda natural: {e}")
         return Response({
             'error': f'Error en el procesamiento: {str(e)}'
-        }, status=500) 
+        }, status=500)
+
+@api_view(['GET'])
+def api_documentation(request):
+    """
+    Documentación de la API de búsqueda de lugares
+    Genérica para TODOS los tipos de establecimientos
+    """
+    documentation = {
+        "title": "API de Búsqueda de Lugares - Sistema Genérico",
+        "description": "API para búsqueda semántica de lugares usando Pinecone y embeddings optimizados",
+        "version": "2.0",
+        "endpoints": {
+            "search_places": {
+                "url": "/api/pinecone/places/search/",
+                "method": "GET",
+                "description": "Búsqueda semántica genérica de lugares",
+                "parameters": {
+                    "query": "Consulta de búsqueda (ej: 'restaurante con terraza', 'lugar con wifi')",
+                    "top_k": "Número máximo de resultados (default: 5)",
+                    "place_type": "Tipo de lugar específico (opcional, ej: 'restaurante', 'hotel', 'bar')",
+                    "category": "Categoría específica (opcional, ej: 'restaurantes', 'hoteles', 'lugares_de_entretenimiento')"
+                },
+                "example": "GET /api/pinecone/places/search/?query=restaurante con terraza&top_k=5"
+            },
+            "places_with_amenities": {
+                "url": "/api/pinecone/places/places-with-amenities/",
+                "method": "GET",
+                "description": "Buscar lugares con amenidades específicas",
+                "parameters": {
+                    "amenities": "Lista de amenidades separadas por comas (ej: 'piscina,gimnasio,wifi')",
+                    "place_type": "Tipo de lugar específico (opcional)",
+                    "top_k": "Número máximo de resultados (default: 5)"
+                },
+                "example": "GET /api/pinecone/places/places-with-amenities/?amenities=piscina,gimnasio&place_type=hotel&top_k=5"
+            },
+            "search_with_rating_and_amenities": {
+                "url": "/api/pinecone/places/search-with-rating-and-amenities/",
+                "method": "POST",
+                "description": "Buscar lugares con rating específico y amenidades",
+                "body": {
+                    "rating": "Rating mínimo requerido (0-5)",
+                    "amenities": "Lista de amenidades",
+                    "place_type": "Tipo de lugar específico (opcional)",
+                    "top_k": "Número máximo de resultados (default: 5)"
+                },
+                "example": {
+                    "rating": 4.0,
+                    "amenities": ["piscina", "gimnasio"],
+                    "place_type": "hotel",
+                    "top_k": 5
+                }
+            },
+            "search_by_rating_range": {
+                "url": "/api/pinecone/places/search-by-rating-range/",
+                "method": "POST",
+                "description": "Buscar lugares en un rango de rating específico",
+                "body": {
+                    "min_rating": "Rating mínimo (0-5)",
+                    "max_rating": "Rating máximo (0-5)",
+                    "amenities": "Lista de amenidades (opcional)",
+                    "place_type": "Tipo de lugar específico (opcional)",
+                    "top_k": "Número máximo de resultados (default: 5)"
+                },
+                "example": {
+                    "min_rating": 3.0,
+                    "max_rating": 4.5,
+                    "amenities": ["wifi"],
+                    "place_type": "restaurante",
+                    "top_k": 5
+                }
+            },
+            "smart_place_search": {
+                "url": "/api/pinecone/places/smart-search/",
+                "method": "POST",
+                "description": "Búsqueda inteligente con múltiples criterios",
+                "body": {
+                    "query": "Consulta natural",
+                    "place_type": "Tipo de lugar (ej: 'restaurante', 'hotel', 'bar', 'parque')",
+                    "category": "Categoría específica (ej: 'restaurantes', 'hoteles', 'centros_comerciales')",
+                    "price_level": "Nivel de precio (ej: 'económico', 'moderado', 'caro', 'muy caro')",
+                    "rating_min": "Rating mínimo (0-5)",
+                    "rating_max": "Rating máximo (0-5)",
+                    "amenities": "Lista de amenidades",
+                    "features": "Lista de características",
+                    "top_k": "Número máximo de resultados (default: 5)"
+                }
+            }
+        },
+        "tipos_de_lugares_soportados": [
+            "restaurantes", "bares", "cafés", "hoteles", "discotecas", "cines", 
+            "museos", "parques", "centros comerciales", "spas", "gimnasios",
+            "lugares turísticos", "lugares acuáticos", "lugares campestres"
+        ],
+        "amenidades_comunes": [
+            "piscina", "gimnasio", "spa", "terraza", "wifi", "estacionamiento",
+            "restaurante", "bar", "vista", "aire acondicionado", "servicio de habitaciones"
+        ],
+        "niveles_de_precio": {
+            1: "Económico: Lugares con precios bajos",
+            2: "Moderado: Lugares con precios medios",
+            3: "Caro: Lugares con precios altos",
+            4: "Muy caro: Lugares con precios muy altos, como hoteles de lujo o restaurantes de estrellas Michelin"
+        },
+        "caracteristicas_extraidas": {
+            "amenidades": "Servicios y facilidades disponibles",
+            "servicios": "Tipos de servicios ofrecidos",
+            "tipo_experiencia": "Tipo de experiencia que ofrece",
+            "nivel_lujo": "Nivel de lujo o sofisticación",
+            "publico_objetivo": "Público objetivo del lugar",
+            "palabras_clave": "Palabras clave relevantes para búsqueda"
+        },
+        "mejoras_de_query": {
+            "ejemplos": {
+                "original": "hotel con piscina",
+                "mejorada": "hotel amenidad piscina palabra clave actividad acuática"
+            },
+            "mapeos_semanticos": {
+                "refrescarme": "actividad acuática",
+                "relajarme": "bienestar",
+                "comer": "servicio restaurante",
+                "trabajar": "conectividad",
+                "romántico": "experiencia romántico"
+            }
+        }
+    }
+    
+    return Response(documentation) 

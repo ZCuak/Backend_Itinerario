@@ -33,4 +33,12 @@ urlpatterns = [
     
     # Búsqueda natural (procesamiento con DeepSeek)
     path('places/process-natural-search/', places_views.process_natural_search, name='process_natural_search'),
+    
+    # Búsquedas genéricas por amenidades y características
+    path('places/places-with-amenities/', places_views.find_places_with_amenities, name='places_with_amenities'),
+    path('places/search-with-rating-and-amenities/', places_views.search_places_with_rating_and_amenities, name='search_places_with_rating_and_amenities'),
+    path('places/search-by-rating-range/', places_views.search_places_by_rating_range, name='search_places_by_rating_range'),
+    
+    # Documentación de la API
+    path('places/docs/', places_views.api_documentation, name='api_documentation'),
 ] 
