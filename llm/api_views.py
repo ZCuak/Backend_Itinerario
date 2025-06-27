@@ -111,7 +111,8 @@ def buscar_lugares_api(request):
                 'tipos_adicionales': candidato.get('tipos_adicionales', []),
                 'rating': candidato['rating'],
                 'score_similitud': round(candidato['score_similitud'], 3),
-                'resumen_ia': candidato.get('resumen_ia', '')
+                'resumen_ia': candidato.get('resumen_ia', ''),
+                'palabras_clave_ia': candidato.get('palabras_clave_ia', '')
             }
             
             # Incluir metadata si se solicita
@@ -124,6 +125,24 @@ def buscar_lugares_api(request):
                     'longitud': metadata.get('longitud', 0),
                     'total_ratings': metadata.get('total_ratings', 0)
                 })
+            
+            # Incluir datos adicionales de la BD (siempre disponibles)
+            candidato_formateado.update({
+                'direccion': candidato.get('direccion', ''),
+                'latitud': candidato.get('latitud', 0),
+                'longitud': candidato.get('longitud', 0),
+                'total_ratings': candidato.get('total_ratings', 0),
+                'website': candidato.get('website', ''),
+                'telefono': candidato.get('telefono', ''),
+                'horarios': candidato.get('horarios', []),
+                'estado_negocio': candidato.get('estado_negocio', ''),
+                
+                # Información de nivel de precio
+                'nivel_precios': candidato.get('nivel_precios'),
+                'rango_precio_inferior': candidato.get('rango_precio_inferior'),
+                'rango_precio_superior': candidato.get('rango_precio_superior'),
+                'moneda_precio': candidato.get('moneda_precio', 'PEN')
+            })
             
             candidatos_formateados.append(candidato_formateado)
         
@@ -322,9 +341,12 @@ def buscar_por_tipo_api(request):
             top_k=max_resultados
         )
         
+        # Obtener datos adicionales de la base de datos
+        candidatos_con_datos = integrator.obtener_datos_adicionales_bd(candidatos)
+        
         # Formatear resultados
         resultados_formateados = []
-        for candidato in candidatos:
+        for candidato in candidatos_con_datos:
             resultado = {
                 'id': candidato['id'],
                 'nombre': candidato['nombre'],
@@ -332,7 +354,24 @@ def buscar_por_tipo_api(request):
                 'tipos_adicionales': candidato.get('tipos_adicionales', []),
                 'rating': candidato['rating'],
                 'score_similitud': round(candidato['score_similitud'], 3),
-                'resumen_ia': candidato.get('resumen_ia', '')
+                'resumen_ia': candidato.get('resumen_ia', ''),
+                'palabras_clave_ia': candidato.get('palabras_clave_ia', ''),
+                
+                # Datos adicionales de la BD
+                'direccion': candidato.get('direccion', ''),
+                'latitud': candidato.get('latitud', 0),
+                'longitud': candidato.get('longitud', 0),
+                'total_ratings': candidato.get('total_ratings', 0),
+                'website': candidato.get('website', ''),
+                'telefono': candidato.get('telefono', ''),
+                'horarios': candidato.get('horarios', []),
+                'estado_negocio': candidato.get('estado_negocio', ''),
+                
+                # Información de nivel de precio
+                'nivel_precios': candidato.get('nivel_precios'),
+                'rango_precio_inferior': candidato.get('rango_precio_inferior'),
+                'rango_precio_superior': candidato.get('rango_precio_superior'),
+                'moneda_precio': candidato.get('moneda_precio', 'PEN')
             }
             resultados_formateados.append(resultado)
         

@@ -69,12 +69,27 @@ interface Lugar {
   rating: number;
   score_similitud: number;
   resumen_ia: string;
-  // Campos opcionales (si incluir_metadata: true)
-  direccion?: string;
-  nivel_precios?: string;
-  latitud?: number;
-  longitud?: number;
-  total_ratings?: number;
+  palabras_clave_ia: string;
+  
+  // Datos de ubicación
+  direccion: string;
+  latitud: number;
+  longitud: number;
+  total_ratings: number;
+  
+  // Información de contacto
+  website?: string;
+  telefono?: string;
+  
+  // Horarios y estado
+  horarios: any[];
+  estado_negocio: string;
+  
+  // Información de nivel de precio
+  nivel_precios?: number;
+  rango_precio_inferior?: number;
+  rango_precio_superior?: number;
+  moneda_precio: string;
 }
 ```
 
@@ -101,11 +116,25 @@ interface Lugar {
       "rating": 4.8,
       "score_similitud": 0.92,
       "resumen_ia": "Hotel de lujo con piscina infinita y spa completo...",
+      "palabras_clave_ia": "lujo, piscina, spa, gimnasio, restaurante gourmet",
       "direccion": "Av. Principal 123, Lima",
-      "nivel_precios": "$$$",
       "latitud": -12.3456,
       "longitud": -78.9012,
-      "total_ratings": 156
+      "total_ratings": 156,
+      "website": "https://www.luxuryresort.com",
+      "telefono": "+51 1 234-5678",
+      "horarios": [
+        {
+          "day": "monday",
+          "open": "06:00",
+          "close": "23:00"
+        }
+      ],
+      "estado_negocio": "OPERATIONAL",
+      "nivel_precios": 4,
+      "rango_precio_inferior": 200.0,
+      "rango_precio_superior": 500.0,
+      "moneda_precio": "PEN"
     }
   ],
   "total_seleccionados": 8,
@@ -230,7 +259,26 @@ interface BuscarPorTipoResponse {
       "tipos_adicionales": ["lodging", "gym", "spa"],
       "rating": 4.6,
       "score_similitud": 0.88,
-      "resumen_ia": "Hotel con piscina climatizada y gimnasio completo..."
+      "resumen_ia": "Hotel con piscina climatizada y gimnasio completo...",
+      "palabras_clave_ia": "wellness, spa, piscina, masajes, relajación",
+      "direccion": "Calle Wellness 789, Lima",
+      "latitud": -12.3457,
+      "longitud": -78.9013,
+      "total_ratings": 89,
+      "website": "https://www.wellnesscenter.com",
+      "telefono": "+51 1 987-6543",
+      "horarios": [
+        {
+          "day": "monday",
+          "open": "05:00",
+          "close": "22:00"
+        }
+      ],
+      "estado_negocio": "OPERATIONAL",
+      "nivel_precios": 3,
+      "rango_precio_inferior": 120.0,
+      "rango_precio_superior": 300.0,
+      "moneda_precio": "PEN"
     }
   ],
   "total_encontrados": 15
@@ -524,6 +572,46 @@ CORS_ALLOWED_ORIGINS = [
     "http://localhost:8080",  # Vue
     "http://localhost:4200",  # Angular
 ]
+```
+
+---
+
+## ⚡ **Optimización de Datos Adicionales**
+
+### **Flujo Optimizado:**
+1. **Extracción de Filtros** - DeepSeek analiza el mensaje del usuario
+2. **Búsqueda Semántica** - Embeddings encuentran candidatos relevantes
+3. **Selección LLM** - DeepSeek selecciona los mejores candidatos
+4. **Enriquecimiento BD** - Se obtienen datos adicionales directamente de la base de datos
+
+### **Ventajas de la Optimización:**
+- ✅ **Ahorro de Tokens**: No se usa LLM para obtener datos básicos
+- ✅ **Datos Completos**: Información actualizada de la base de datos
+- ✅ **Rendimiento**: Consultas directas a BD son más rápidas
+- ✅ **Precisión**: Datos exactos de nivel de precio, horarios, contacto
+
+### **Datos Obtenidos de la BD:**
+- **Información de Contacto**: Website, teléfono
+- **Ubicación**: Dirección exacta, coordenadas
+- **Horarios**: Horarios de operación por día
+- **Nivel de Precio**: Rango inferior/superior y moneda
+- **Estado del Negocio**: Si está operativo
+- **Ratings**: Total de calificaciones
+
+### **Ejemplo de Implementación:**
+```python
+# En el integrador
+def obtener_datos_adicionales_bd(self, candidatos):
+    # Extraer IDs únicos
+    ids_lugares = [candidato['id'] for candidato in candidatos]
+    
+    # Consulta eficiente a la BD
+    lugares_bd = LugarGooglePlaces.objects.filter(
+        id__in=ids_lugares
+    ).select_related('nivel_precios')
+    
+    # Enriquecer candidatos con datos completos
+    return self._enriquecer_candidatos(candidatos, lugares_bd)
 ```
 
 ---

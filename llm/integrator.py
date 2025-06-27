@@ -3,6 +3,7 @@ Integrador que conecta DeepSeek con el sistema de embeddings
 1. DeepSeek extrae filtros del mensaje del usuario
 2. Sistema de embeddings busca candidatos usando esos filtros
 3. LLM selecciona los mejores candidatos
+4. Se obtienen datos adicionales de la base de datos usando los IDs
 """
 
 import os
@@ -299,15 +300,18 @@ class ChatbotIntegrator:
             # 3. Seleccionar mejores candidatos con LLM
             mejores_candidatos = self.seleccionar_mejores_candidatos(candidatos, filtros)
             
+            # 4. Obtener datos adicionales de la base de datos usando los IDs
+            candidatos_con_datos = self.obtener_datos_adicionales_bd(mejores_candidatos)
+            
             resultado = {
                 'mensaje_original': mensaje_usuario,
                 'filtros_extraidos': filtros,
                 'candidatos_encontrados': len(candidatos),
-                'mejores_candidatos': mejores_candidatos,
-                'total_seleccionados': len(mejores_candidatos)
+                'mejores_candidatos': candidatos_con_datos,
+                'total_seleccionados': len(candidatos_con_datos)
             }
             
-            logger.info(f"✅ Procesamiento completado: {len(mejores_candidatos)} candidatos seleccionados")
+            logger.info(f"✅ Procesamiento completado: {len(candidatos_con_datos)} candidatos seleccionados")
             return resultado
             
         except Exception as e:
@@ -317,6 +321,92 @@ class ChatbotIntegrator:
                 'error': str(e),
                 'mejores_candidatos': []
             }
+
+    def obtener_datos_adicionales_bd(self, candidatos: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """
+        Obtiene datos adicionales de la base de datos usando los IDs de los candidatos
+        
+        Args:
+            candidatos: Lista de candidatos con IDs
+            
+        Returns:
+            Lista de candidatos con datos adicionales completos
+        """
+        try:
+            from chatbot.models import LugarGooglePlaces, NivelPrecio
+            
+            # Extraer IDs únicos
+            ids_lugares = [candidato['id'] for candidato in candidatos if candidato.get('id')]
+            
+            if not ids_lugares:
+                logger.warning("⚠️ No hay IDs de lugares para obtener datos adicionales")
+                return candidatos
+            
+            # Obtener datos completos de la base de datos
+            lugares_bd = LugarGooglePlaces.objects.filter(
+                id__in=ids_lugares
+            ).select_related('nivel_precios')
+            
+            # Crear diccionario para acceso rápido
+            lugares_dict = {lugar.id: lugar for lugar in lugares_bd}
+            
+            # Enriquecer candidatos con datos adicionales
+            candidatos_enriquecidos = []
+            
+            for candidato in candidatos:
+                lugar_id = candidato.get('id')
+                if lugar_id and lugar_id in lugares_dict:
+                    lugar_bd = lugares_dict[lugar_id]
+                    
+                    # Crear candidato enriquecido
+                    candidato_enriquecido = {
+                        'id': candidato['id'],
+                        'nombre': candidato['nombre'],
+                        'tipo_principal': candidato['tipo_principal'],
+                        'tipos_adicionales': candidato.get('tipos_adicionales', []),
+                        'rating': candidato['rating'],
+                        'score_similitud': candidato['score_similitud'],
+                        'resumen_ia': candidato.get('resumen_ia', ''),
+                        'palabras_clave_ia': candidato.get('palabras_clave_ia', ''),
+                        
+                        # Datos adicionales de la BD
+                        'direccion': lugar_bd.direccion,
+                        'latitud': lugar_bd.latitud,
+                        'longitud': lugar_bd.longitud,
+                        'total_ratings': lugar_bd.total_ratings,
+                        'website': lugar_bd.website,
+                        'telefono': lugar_bd.telefono,
+                        'horarios': lugar_bd.horarios,
+                        'estado_negocio': lugar_bd.estado_negocio,
+                        
+                        # Información de nivel de precio
+                        'nivel_precios': None,
+                        'rango_precio_inferior': None,
+                        'rango_precio_superior': None,
+                        'moneda_precio': None
+                    }
+                    
+                    # Agregar información de nivel de precio si existe
+                    if lugar_bd.nivel_precios:
+                        candidato_enriquecido.update({
+                            'nivel_precios': lugar_bd.nivel_precios.nivel,
+                            'rango_precio_inferior': float(lugar_bd.nivel_precios.rango_inferior) if lugar_bd.nivel_precios.rango_inferior else None,
+                            'rango_precio_superior': float(lugar_bd.nivel_precios.rango_superior) if lugar_bd.nivel_precios.rango_superior else None,
+                            'moneda_precio': lugar_bd.nivel_precios.moneda
+                        })
+                    
+                    candidatos_enriquecidos.append(candidato_enriquecido)
+                else:
+                    # Si no se encuentra en BD, mantener candidato original
+                    logger.warning(f"⚠️ Lugar con ID {lugar_id} no encontrado en BD")
+                    candidatos_enriquecidos.append(candidato)
+            
+            logger.info(f"✅ Enriquecidos {len(candidatos_enriquecidos)} candidatos con datos de BD")
+            return candidatos_enriquecidos
+            
+        except Exception as e:
+            logger.error(f"❌ Error al obtener datos adicionales de BD: {e}")
+            return candidatos
 
 def main():
     """Función principal para probar el integrador"""
