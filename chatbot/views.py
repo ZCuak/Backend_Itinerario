@@ -202,21 +202,38 @@ def listar_paises(request):
 @permission_classes([AllowAny])
 def listar_ciudades_por_pais(request):
     pais_id = request.GET.get("pais_id")
+    pais_nombre = request.GET.get("pais")
     
-    if not pais_id:
+    if not pais_id and not pais_nombre:
         return Response({
             "status": "error",
-            "message": "El parámetro 'pais_id' es obligatorio.",
+            "message": "Se requiere el parámetro 'pais_id' o 'pais'.",
             "data": None
         }, status=400)
     
     try:
-        ciudades = Cities.objects.filter(country_id=pais_id).order_by('name')
+        if pais_id:
+            # Buscar por ID del país
+            ciudades = Cities.objects.filter(country_id=pais_id).order_by('name')
+            pais_info = f"ID {pais_id}"
+        else:
+            # Buscar por nombre del país
+            pais_obj = Countries.objects.filter(name__icontains=pais_nombre).first()
+            if not pais_obj:
+                return Response({
+                    "status": "error",
+                    "message": f"No se encontró ningún país que coincida con '{pais_nombre}'.",
+                    "data": None
+                }, status=404)
+            
+            ciudades = Cities.objects.filter(country=pais_obj).order_by('name')
+            pais_info = pais_obj.name
+        
         data = [{"id": c.id, "name": c.name} for c in ciudades]
         
         return Response({
             "status": "success",
-            "message": f"Ciudades encontradas para el país ID {pais_id}.",
+            "message": f"Ciudades encontradas para {pais_info}.",
             "data": data
         })
     except Exception as e:
