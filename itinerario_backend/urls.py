@@ -21,4 +21,5 @@ urlpatterns = [
     path('admin/', admin.site.urls),
     path('api/', include('chatbot.urls')),
     path('api/deepseek/', include('chatbot.deepseek.urls')),
+    path('api/llm/', include('llm.urls')),
 ]

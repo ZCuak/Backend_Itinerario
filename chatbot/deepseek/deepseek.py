@@ -275,3 +275,97 @@ def extraer_caracteristicas_lotes(lugares_data, max_lotes=3):
             time.sleep(3)  # Pausa más larga para evitar límites
     
     return caracteristicas
+
+def extraer_palabras_clave_resumen(resumen_ia: str) -> str:
+    """
+    Extrae palabras clave del resumen IA para embeddings eficientes.
+    
+    Args:
+        resumen_ia (str): Resumen IA completo
+        
+    Returns:
+        str: Palabras clave separadas por comas (máximo 50-100 palabras)
+    """
+    try:
+        if not resumen_ia or not resumen_ia.strip():
+            return ""
+        
+        prompt = f"""
+        Eres un experto en extracción de palabras clave para búsquedas semánticas.
+        
+        Extrae las palabras clave más importantes del siguiente resumen de un lugar turístico.
+        Las palabras clave deben ser términos que un usuario usaría para buscar este lugar.
+        
+        RESUMEN: {resumen_ia}
+        
+        REGLAS IMPORTANTES:
+        1. Extrae solo las palabras clave más relevantes (máximo 50-100 palabras)
+        2. Incluye características físicas, servicios, ambiente, público objetivo
+        3. Usa términos específicos y descriptivos
+        4. Incluye sinónimos y términos relacionados
+        5. Separa las palabras clave con comas
+        6. NO uses frases largas, solo palabras o términos cortos
+        7. Enfócate en términos que ayuden a encontrar el lugar
+        
+        EJEMPLOS DE PALABRAS CLAVE:
+        - Para hoteles: lujo, piscina, spa, gimnasio, restaurante, bar, wifi, familia, romántico, negocios
+        - Para restaurantes: gourmet, italiano, romántico, familiar, terraza, música, vegetariano
+        - Para bares: música en vivo, cocteles, fiesta, terraza, deportes, karaoke
+        
+        Palabras clave extraídas:
+        """
+        
+        # Enviar el prompt a DeepSeek
+        respuesta = enviar_prompt(prompt)
+        
+        if respuesta:
+            # Limpiar y formatear la respuesta
+            palabras_clave = limpiar_texto(respuesta)
+            
+            # Asegurar que no exceda un límite razonable
+            palabras = [palabra.strip() for palabra in palabras_clave.split(',') if palabra.strip()]
+            palabras_clave_final = ', '.join(palabras[:100])  # Máximo 100 palabras
+            
+            return palabras_clave_final.strip()
+        else:
+            return ""
+            
+    except Exception as e:
+        print(f"Error al extraer palabras clave: {str(e)}")
+        return ""
+
+def extraer_palabras_clave_lotes(resumenes_data: list, max_lotes: int = 10) -> dict:
+    """
+    Extrae palabras clave para múltiples resúmenes en lotes.
+    
+    Args:
+        resumenes_data: Lista de diccionarios con 'id' y 'resumen_ia'
+        max_lotes: Número máximo de resúmenes a procesar por lote
+    
+    Returns:
+        dict: Diccionario con las palabras clave extraídas por lugar_id
+    """
+    palabras_clave = {}
+    
+    for i in range(0, len(resumenes_data), max_lotes):
+        lote = resumenes_data[i:i + max_lotes]
+        print(f"🔍 Procesando lote {i//max_lotes + 1} de {(len(resumenes_data) + max_lotes - 1) // max_lotes}")
+        
+        for item in lote:
+            lugar_id = item.get('id')
+            resumen_ia = item.get('resumen_ia', '')
+            
+            if lugar_id and resumen_ia:
+                palabras_clave_texto = extraer_palabras_clave_resumen(resumen_ia)
+                if palabras_clave_texto:
+                    palabras_clave[lugar_id] = palabras_clave_texto
+                    print(f"✅ Palabras clave extraídas para lugar {lugar_id}: {len(palabras_clave_texto.split(','))} términos")
+                else:
+                    print(f"⚠️ No se pudieron extraer palabras clave para lugar {lugar_id}")
+        
+        # Pausa entre lotes para evitar límites de rate
+        if i + max_lotes < len(resumenes_data):
+            import time
+            time.sleep(2)
+    
+    return palabras_clave

@@ -313,8 +313,8 @@ class LugarGooglePlaces(models.Model):
     # Resumen generado por IA
     resumen_ia = models.TextField(blank=True, null=True)
     
-    # Características extraídas por DeepSeek
-    caracteristicas_extraidas = models.JSONField(default=dict, blank=True, null=True)
+    # Palabras clave extraídas por IA para embeddings
+    palabras_clave_ia = models.TextField(blank=True, null=True, help_text="Palabras clave extraídas del resumen para embeddings eficientes")
     
     # Estado del negocio
     estado_negocio = models.CharField(max_length=50, default='OPERATIONAL')

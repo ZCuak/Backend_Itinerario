@@ -83,22 +83,72 @@ def procesar_consulta_nlp(request):
         3. Piensa en las AMENIDADES y SERVICIOS que necesita para cumplir su intención
         
         TIPOS DE ESTABLECIMIENTOS DISPONIBLES:
-        - hotel: para hospedaje, descanso, alojamiento
-        - restaurant: para comer, cenar, almorzar, gastronomía
-        - bar: para beber, fiestas, música, entretenimiento nocturno
-        - cafe: para café, trabajo, reuniones informales
-        - spa: para relajación, masajes, bienestar
-        - gimnasio: para ejercicio, entrenamiento, fitness
-        - discoteca: para fiestas, baile, música en vivo
-        - museo: para cultura, arte, educación
-        - parque: para recreación, aire libre, actividades
-        - centro comercial: para compras, entretenimiento, gastronomía
+        - amusement_park: parques de diversiones, atracciones
+        - aquarium: acuarios, vida marina
+        - art_gallery: galerías de arte, exposiciones
+        - bar: bares, bebidas, entretenimiento nocturno
+        - beach: playas, actividades acuáticas
+        - casino: casinos, juegos de azar
+        - hotel: hoteles, hospedaje, alojamiento
+        - lodging: alojamiento, hospedaje
+        - movie_theater: cines, películas
+        - museum: museos, cultura, arte
+        - night_club: clubes nocturnos, fiestas
+        - restaurant: restaurantes, comida, gastronomía
+        - shopping_mall: centros comerciales, compras
+        - store: tiendas, comercio
+        - tourist_attraction: atracciones turísticas
+        - water_park: parques acuáticos
+        - event_venue: lugares de eventos
+        - food: comida, gastronomía
+        - point_of_interest: puntos de interés
+        - establishment: establecimientos
+        - bakery: panaderías
+        - coffee_shop: cafeterías, café
+        - cafe: cafés, bebidas
+        - dessert_shop: tiendas de postres
+        - confectionery: confiterías, dulces
+        - food_store: tiendas de comida
+        - ice_cream_shop: heladerías
+        - hamburger_restaurant: restaurantes de hamburguesas
+        - american_restaurant: restaurantes americanos
+        - chinese_restaurant: restaurantes chinos
+        - inn: posadas, hospedaje
+        - natural_feature: características naturales
+        - market: mercados
+        - park: parques, recreación
+        - church: iglesias
+        - place_of_worship: lugares de culto
+        - historical_landmark: monumentos históricos
+        - amusement_center: centros de entretenimiento
+        - historical_place: lugares históricos
+        - bar_and_grill: bares y parrillas
+        - cafeteria: cafeterías
+        - brunch_restaurant: restaurantes de brunch
+        - home_goods_store: tiendas de hogar
+        - painter: pintores, arte
+        - courier_service: servicios de mensajería
+        - supermarket: supermercados
+        - grocery_store: tiendas de abarrotes
+        - wholesaler: mayoristas
+        - discount_store: tiendas de descuentos
+        - department_store: tiendas por departamentos
+        - clothing_store: tiendas de ropa
+        - sporting_goods_store: tiendas deportivas
+        - furniture_store: tiendas de muebles
+        - home_improvement_store: tiendas de mejoras para el hogar
         
         EJEMPLOS DE ANÁLISIS:
         - "hotel para ejercitarme" → tipo_lugar: "hotel", caracteristicas_busqueda: ["gimnasio", "ejercicio", "fitness", "entrenamiento", "equipos deportivos"]
         - "restaurante romántico" → tipo_lugar: "restaurant", caracteristicas_busqueda: ["ambiente romántico", "cena romántica", "intimidad", "decoración elegante"]
         - "lugar para trabajar" → tipo_lugar: "cafe", caracteristicas_busqueda: ["wifi", "mesas de trabajo", "ambiente tranquilo", "enchufes", "café"]
         - "bar para fiesta" → tipo_lugar: "bar", caracteristicas_busqueda: ["música", "ambiente festivo", "bebidas", "entretenimiento", "baile"]
+        - "comprar ropa" → tipo_lugar: "clothing_store", caracteristicas_busqueda: ["ropa", "moda", "vestimenta", "accesorios"]
+        - "dulces y postres" → tipo_lugar: "bakery", caracteristicas_busqueda: ["pan", "dulces", "postres", "repostería"]
+        - "entretenimiento familiar" → tipo_lugar: "amusement_park", caracteristicas_busqueda: ["diversión", "atracciones", "familia", "entretenimiento"]
+        - "actividad cultural" → tipo_lugar: "museum", caracteristicas_busqueda: ["cultura", "arte", "educación", "exposiciones"]
+        - "comida rápida" → tipo_lugar: "hamburger_restaurant", caracteristicas_busqueda: ["comida rápida", "hamburguesas", "fast food"]
+        - "supermercado" → tipo_lugar: "supermarket", caracteristicas_busqueda: ["comestibles", "productos", "supermercado", "abarrotes"]
         
         Extrae y devuelve SOLO un JSON válido con los siguientes campos:
         
