@@ -38,7 +38,7 @@ class VectorQueryEngine:
         
         Args:
             consulta: Consulta de texto del usuario
-            tipo_principal: Filtro por tipo de establecimiento
+            tipo_principal: Filtro por tipo de establecimiento (considera tipo_principal y tipos_adicionales)
             top_k: Número máximo de resultados
             
         Returns:
@@ -47,19 +47,22 @@ class VectorQueryEngine:
         try:
             logger.info(f"🔍 Buscando lugares con consulta: '{consulta}'")
             if tipo_principal:
-                logger.info(f"📋 Filtro por tipo: {tipo_principal}")
+                logger.info(f"📋 Filtro por tipo: {tipo_principal} (incluye tipos adicionales)")
             
-            # Construir filtros
-            filter_dict = None
+            # Si se especifica un tipo, usar el método search_by_tipo que considera tipos_adicionales
             if tipo_principal:
-                filter_dict = {"tipo_principal": tipo_principal}
-            
-            # Realizar búsqueda vectorial
-            resultados = self.vector_db.search_similar(
-                query=consulta,
-                top_k=top_k,
-                filter_dict=filter_dict
-            )
+                resultados = self.vector_db.search_by_tipo(
+                    query=consulta,
+                    tipo_principal=tipo_principal,
+                    top_k=top_k
+                )
+            else:
+                # Si no se especifica tipo, usar búsqueda general
+                resultados = self.vector_db.search_similar(
+                    query=consulta,
+                    top_k=top_k,
+                    filter_dict=None
+                )
             
             logger.info(f"✅ Encontrados {len(resultados)} lugares")
             
@@ -70,6 +73,7 @@ class VectorQueryEngine:
                     'id': resultado['lugar_id'],
                     'nombre': resultado['nombre'],
                     'tipo_principal': resultado['tipo_principal'],
+                    'tipos_adicionales': resultado.get('tipos_adicionales', []),
                     'rating': resultado['rating'],
                     'score_similitud': resultado['score'],
                     'resumen_ia': resultado['resumen_ia'],

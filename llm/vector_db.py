@@ -63,6 +63,7 @@ class VectorDatabase:
                         'lugar_id': lugar['id'],
                         'nombre': lugar.get('nombre', ''),
                         'tipo_principal': lugar.get('tipo_principal', ''),
+                        'tipos_adicionales': lugar.get('tipos_adicionales', []),
                         'rating': lugar.get('rating', 0),
                         'nivel_precios': lugar.get('nivel_precios', ''),
                         'direccion': lugar.get('direccion', ''),
@@ -128,6 +129,7 @@ class VectorDatabase:
                     'lugar_id': result.metadata.get('lugar_id'),
                     'nombre': result.metadata.get('nombre', ''),
                     'tipo_principal': result.metadata.get('tipo_principal', ''),
+                    'tipos_adicionales': result.metadata.get('tipos_adicionales', []),
                     'rating': result.metadata.get('rating', 0),
                     'resumen_ia': result.metadata.get('resumen_ia', ''),
                     'palabras_clave_ia': result.metadata.get('palabras_clave_ia', '')
@@ -146,7 +148,7 @@ class VectorDatabase:
                       tipo_principal: str,
                       top_k: int = 5) -> List[Dict]:
         """
-        Busca lugares de un tipo específico
+        Busca lugares de un tipo específico considerando tanto tipo_principal como tipos_adicionales
         
         Args:
             query: Consulta de texto
@@ -156,8 +158,57 @@ class VectorDatabase:
         Returns:
             Lista de lugares del tipo especificado
         """
-        filter_dict = {"tipo_principal": tipo_principal}
-        return self.search_similar(query, top_k, filter_dict)
+        try:
+            # Generar embedding de la consulta
+            query_embedding = self.embedder.encode_text(query)
+            
+            # Buscar en Pinecone sin filtros para obtener más candidatos
+            # Luego filtrar por tipo en el código
+            results = self.pinecone_client.query_vectors(
+                query_vector=query_embedding,
+                top_k=top_k * 3,  # Buscar más candidatos para filtrar después
+                filter_dict=None
+            )
+            
+            # Filtrar resultados por tipo (tipo_principal o tipos_adicionales)
+            filtered_results = []
+            for result in results:
+                metadata = result.metadata
+                tipo_principal_lugar = metadata.get('tipo_principal', '')
+                tipos_adicionales_lugar = metadata.get('tipos_adicionales', [])
+                
+                # Verificar si el lugar tiene el tipo buscado
+                if (tipo_principal_lugar == tipo_principal or 
+                    tipo_principal in tipos_adicionales_lugar):
+                    filtered_results.append(result)
+                    
+                    # Si ya tenemos suficientes resultados, parar
+                    if len(filtered_results) >= top_k:
+                        break
+            
+            # Formatear resultados filtrados
+            formatted_results = []
+            for result in filtered_results:
+                formatted_result = {
+                    'id': result.id,
+                    'score': result.score,
+                    'metadata': result.metadata,
+                    'lugar_id': result.metadata.get('lugar_id'),
+                    'nombre': result.metadata.get('nombre', ''),
+                    'tipo_principal': result.metadata.get('tipo_principal', ''),
+                    'tipos_adicionales': result.metadata.get('tipos_adicionales', []),
+                    'rating': result.metadata.get('rating', 0),
+                    'resumen_ia': result.metadata.get('resumen_ia', ''),
+                    'palabras_clave_ia': result.metadata.get('palabras_clave_ia', '')
+                }
+                formatted_results.append(formatted_result)
+            
+            logger.info(f"Búsqueda por tipo '{tipo_principal}' completada: {len(formatted_results)} resultados")
+            return formatted_results
+            
+        except Exception as e:
+            logger.error(f"Error en búsqueda por tipo: {e}")
+            raise
     
     def get_index_stats(self) -> Dict:
         """Obtiene estadísticas del índice"""

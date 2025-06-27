@@ -9,6 +9,7 @@ Este sistema integra **DeepSeek** para extracción de filtros, **embeddings loca
 - ✅ **Uso de palabras clave**: Prioriza `palabras_clave_ia` sobre resúmenes completos
 - ✅ **Eliminación de duplicados**: Múltiples puntos de verificación para evitar candidatos duplicados
 - ✅ **Consulta semántica mejorada**: Combina características extraídas con la consulta original
+- ✅ **Filtrado inteligente por tipos**: Considera tanto `tipo_principal` como `tipos_adicionales`
 - ✅ **Ahorro de tokens**: Reduce significativamente el uso de tokens en LLM
 
 ## 🚀 **Endpoints Disponibles**
@@ -42,6 +43,7 @@ Este sistema integra **DeepSeek** para extracción de filtros, **embeddings loca
             "id": 123,
             "nombre": "Hotel Luxury Resort",
             "tipo_principal": "hotel",
+            "tipos_adicionales": ["lodging", "spa", "restaurant"],
             "rating": 4.8,
             "score_similitud": 0.92,
             "palabras_clave_ia": "lujo, piscina, spa, gimnasio, restaurante gourmet",
@@ -84,7 +86,7 @@ Este sistema integra **DeepSeek** para extracción de filtros, **embeddings loca
 
 ### 3. **Búsqueda por Tipo** - `/api/chatbot/buscar-tipo/`
 
-**POST** - Busca lugares de un tipo específico.
+**POST** - Busca lugares de un tipo específico (considera tanto tipo_principal como tipos_adicionales).
 
 #### **Request Body:**
 ```json
@@ -102,7 +104,8 @@ Este sistema integra **DeepSeek** para extracción de filtros, **embeddings loca
         {
             "id": 456,
             "nombre": "Hotel Wellness Center",
-            "tipo_principal": "hotel",
+            "tipo_principal": "lodging",
+            "tipos_adicionales": ["hotel", "spa", "wellness"],
             "rating": 4.6,
             "score_similitud": 0.88,
             "palabras_clave_ia": "wellness, spa, piscina, masajes, relajación",
@@ -160,6 +163,7 @@ Este sistema integra **DeepSeek** para extracción de filtros, **embeddings loca
     'id': 123,
     'nombre': 'Hotel Luxury Resort',
     'tipo_principal': 'hotel',
+    'tipos_adicionales': ['lodging', 'spa', 'restaurant'],
     'rating': 4.8,
     'nivel_precios': '$$$',
     'direccion': 'Av. Principal 123',
@@ -179,6 +183,7 @@ Este sistema integra **DeepSeek** para extracción de filtros, **embeddings loca
         'lugar_id': 123,
         'nombre': 'Hotel Luxury Resort',
         'tipo_principal': 'hotel',
+        'tipos_adicionales': ['lodging', 'spa', 'restaurant'],
         'rating': 4.8,
         'palabras_clave_ia': 'lujo, piscina, spa, gimnasio, restaurante gourmet',
         'resumen_ia': 'Hotel de lujo con piscina infinita...'  # Truncado
@@ -248,7 +253,13 @@ from llm.generate_keywords import generar_palabras_clave_todos
 generar_palabras_clave_todos()
 ```
 
-### **Reindexar Pinecone:**
+### **Regenerar Base Vectorial (con tipos_adicionales):**
+```bash
+# Regenerar completamente con tipos_adicionales
+python -m llm.regenerar_vector_db
+```
+
+### **Reindexar Pinecone (método anterior):**
 ```bash
 python manage.py shell
 from llm.ingest import reindexar_pinecone

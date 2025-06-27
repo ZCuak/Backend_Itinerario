@@ -86,6 +86,53 @@ def test_casos_especificos():
     except Exception as e:
         print(f"❌ Error: {e}")
 
+def test_filtrado_por_tipos():
+    """Prueba el filtrado que considera tanto tipo_principal como tipos_adicionales"""
+    print("\n🧪 Probando filtrado por tipos (tipo_principal + tipos_adicionales)...")
+    
+    integrator = ChatbotIntegrator()
+    
+    # Casos de prueba para diferentes tipos
+    casos_tipos = [
+        ("hotel", "Quiero un hotel con piscina"),
+        ("restaurant", "Busco un restaurante romántico"),
+        ("cafe", "Necesito un café con wifi"),
+        ("bar", "Quiero un bar con música en vivo"),
+        ("tourist_attraction", "Busco atracciones turísticas")
+    ]
+    
+    for tipo_buscar, consulta in casos_tipos:
+        print(f"\n📝 Buscando tipo '{tipo_buscar}' con consulta: '{consulta}'")
+        try:
+            # Extraer filtros
+            filtros = integrator.extraer_filtros_deepseek(consulta)
+            print(f"   Filtros extraídos: {filtros.get('tipo_establecimiento', 'N/A')}")
+            
+            # Buscar candidatos con filtro de tipo
+            candidatos = integrator.buscar_candidatos(filtros, top_k=5)
+            
+            print(f"   Candidatos encontrados: {len(candidatos)}")
+            
+            # Verificar que los candidatos tengan el tipo buscado
+            candidatos_correctos = 0
+            for candidato in candidatos[:3]:  # Solo verificar los primeros 3
+                tipo_principal = candidato.get('tipo_principal', '')
+                tipos_adicionales = candidato.get('tipos_adicionales', [])
+                
+                tiene_tipo = (tipo_principal == tipo_buscar or 
+                             tipo_buscar in tipos_adicionales)
+                
+                if tiene_tipo:
+                    candidatos_correctos += 1
+                    print(f"   ✅ {candidato.get('nombre', 'N/A')} - Tipo: {tipo_principal}, Adicionales: {tipos_adicionales}")
+                else:
+                    print(f"   ❌ {candidato.get('nombre', 'N/A')} - Tipo: {tipo_principal}, Adicionales: {tipos_adicionales}")
+            
+            print(f"   📊 Candidatos con tipo correcto: {candidatos_correctos}/3")
+            
+        except Exception as e:
+            print(f"   ❌ Error: {e}")
+
 def main():
     """Función principal de pruebas"""
     print("🚀 Iniciando pruebas de extracción de características específicas...")
@@ -96,8 +143,12 @@ def main():
     # Prueba 2: Caso específico mencionado
     test_casos_especificos()
     
+    # Prueba 3: Filtrado por tipos (nueva funcionalidad)
+    test_filtrado_por_tipos()
+    
     print("\n✅ Pruebas completadas!")
     print("💡 Verificando que se extraigan características específicas del mensaje")
+    print("💡 Verificando que el filtrado considere tanto tipo_principal como tipos_adicionales")
 
 if __name__ == "__main__":
     main() 

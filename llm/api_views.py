@@ -108,6 +108,7 @@ def buscar_lugares_api(request):
                 'id': candidato['id'],
                 'nombre': candidato['nombre'],
                 'tipo_principal': candidato['tipo_principal'],
+                'tipos_adicionales': candidato.get('tipos_adicionales', []),
                 'rating': candidato['rating'],
                 'score_similitud': round(candidato['score_similitud'], 3),
                 'resumen_ia': candidato.get('resumen_ia', '')
@@ -328,6 +329,7 @@ def buscar_por_tipo_api(request):
                 'id': candidato['id'],
                 'nombre': candidato['nombre'],
                 'tipo_principal': candidato['tipo_principal'],
+                'tipos_adicionales': candidato.get('tipos_adicionales', []),
                 'rating': candidato['rating'],
                 'score_similitud': round(candidato['score_similitud'], 3),
                 'resumen_ia': candidato.get('resumen_ia', '')
