@@ -35,25 +35,8 @@ class Countries(models.Model):
     def __str__(self):
         return self.name
 
-class States(models.Model):
-    country = models.ForeignKey(Countries, on_delete=models.CASCADE, db_column='country_id')
-    name = models.CharField(max_length=100)
-    latitude = models.FloatField()
-    longitude = models.FloatField()
-    is_active = models.BooleanField(default=True)
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
-    deleted_at = models.DateTimeField(null=True, blank=True)
-
-    class Meta:
-        db_table = 'states'
-
-    def __str__(self):
-        return self.name
-
 class Cities(models.Model):
     country = models.ForeignKey(Countries, on_delete=models.CASCADE, db_column='country_id')
-    state = models.ForeignKey(States, on_delete=models.CASCADE, db_column='state_id')
     name = models.CharField(max_length=100)
     latitude = models.FloatField()
     longitude = models.FloatField()
@@ -68,18 +51,7 @@ class Cities(models.Model):
     def __str__(self):
         return self.name
 
-class Tipo_Transporte(models.Model):
-    nombre = models.CharField(max_length=100)
-    estado = models.BooleanField(default=True)
-
-    class Meta:
-        db_table = 'tipo_transporte'
-
-    def __str__(self):
-        return self.nombre
-
 class Transporte(models.Model):
-    tipo_transporte = models.ForeignKey(Tipo_Transporte, on_delete=models.CASCADE)
     nombre = models.CharField(max_length=100)
     estado = models.BooleanField(default=True)
     
@@ -87,55 +59,7 @@ class Transporte(models.Model):
         db_table = 'transporte'
 
     def __str__(self):
-        return f"{self.nombre} - {self.tipo_transporte.nombre}"
-
-class Tipo_Lugar(models.Model):
-    nombre = models.CharField(max_length=100)
-    estado = models.BooleanField(default=True)
-
-    class Meta:
-        db_table = 'tipo_lugar'
-
-    def __str__(self):
         return self.nombre
-
-class Lugar(models.Model):
-    ESTADOS = [
-        ('pendiente', 'Pendiente'),
-        ('confirmado', 'Confirmado'),
-        ('cancelado', 'Cancelado')
-    ]
-    
-    nombre = models.CharField(max_length=255)
-    descripcion = models.TextField()
-    estado = models.CharField(max_length=20, choices=ESTADOS, default='pendiente')
-    ubicacion = models.CharField(max_length=255)
-    tipo_lugar = models.ForeignKey(Tipo_Lugar, on_delete=models.CASCADE)
-
-    class Meta:
-        db_table = 'lugar'
-
-    def __str__(self):
-        return self.nombre
-
-class Clima(models.Model):
-    fecha = models.DateField()
-    ciudad = models.ForeignKey(Cities, on_delete=models.CASCADE, null=True, blank=True)
-    pais = models.ForeignKey(Countries, on_delete=models.CASCADE, null=True, blank=True)
-    temperatura_maxima = models.FloatField(null=True, blank=True)
-    temperatura_minima = models.FloatField(null=True, blank=True)
-    estado_clima = models.CharField(max_length=50)
-    humedad = models.IntegerField()
-    probabilidad_lluvia = models.FloatField()
-    created_at = models.DateTimeField(auto_now_add=True, null=True, blank=True)
-    updated_at = models.DateTimeField(auto_now=True, null=True, blank=True)
-    
-    class Meta:
-        db_table = 'clima'
-        unique_together = ('fecha', 'ciudad', 'pais')
-
-    def __str__(self):
-        return f"Clima {self.fecha} - {self.ciudad.name if self.ciudad else 'Sin ciudad'}, {self.pais.name if self.pais else 'Sin país'}"
 
 class Viaje(models.Model):
     ESTADOS = [
@@ -156,57 +80,6 @@ class Viaje(models.Model):
 
     def __str__(self):
         return f"Viaje {self.id} - {self.ciudad_salida.name if self.ciudad_salida else 'Sin ciudad de salida'}"
-
-class Itinerario(models.Model):
-    ESTADOS = [
-        ('pendiente', 'Pendiente'),
-        ('confirmado', 'Confirmado'),
-        ('cancelado', 'Cancelado')
-    ]
-    
-    lugar = models.CharField(max_length=255)
-    ciudad = models.ForeignKey(Cities, on_delete=models.DO_NOTHING)
-    pais = models.ForeignKey(Countries, on_delete=models.DO_NOTHING)
-    dia = models.IntegerField()
-    costo = models.DecimalField(max_digits=10, decimal_places=2)
-    estado = models.CharField(max_length=20, choices=ESTADOS, default='pendiente')
-    viaje = models.ForeignKey(Viaje, on_delete=models.CASCADE)
-    clima = models.ForeignKey(Clima, on_delete=models.CASCADE)
-    transporte = models.ForeignKey(Transporte, on_delete=models.CASCADE)
-
-    class Meta:
-        db_table = 'itinerario'
-
-    def __str__(self):
-        return f"Itinerario {self.id} - {self.lugar}"
-
-class Actividad(models.Model):
-    
-    ESTADOS = [
-        ('pendiente', 'Pendiente'),
-        ('confirmada', 'Confirmada'),
-        ('cancelada', 'Cancelada')
-    ]
-    
-    turno = models.CharField(max_length=10)
-    orden = models.IntegerField()
-    estado = models.CharField(max_length=20, choices=ESTADOS, default='pendiente')
-    itinerario = models.ForeignKey(Itinerario, on_delete=models.CASCADE)
-    lugares = models.ManyToManyField(Lugar, through='Actividad_Lugar')
-
-    class Meta:
-        db_table = 'actividad'
-
-    def __str__(self):
-        return f"Actividad {self.id} - {self.get_turno_display()}"
-
-class Actividad_Lugar(models.Model):
-    actividad = models.ForeignKey(Actividad, on_delete=models.CASCADE)
-    lugar = models.ForeignKey(Lugar, on_delete=models.CASCADE)
-
-    class Meta:
-        db_table = 'actividad_lugar'
-        unique_together = ('actividad', 'lugar')
 
 class NivelPrecio(models.Model):
     nivel = models.IntegerField(unique=True)  # 0-4
@@ -380,4 +253,212 @@ class LugarGooglePlaces(models.Model):
     def es_cafe(self):
         """Verifica si es un café"""
         return self.tiene_tipo('cafe') or self.tiene_tipo('coffee_shop') or self.tiene_tipo('cafeteria')
+
+class Itinerario(models.Model):
+    """
+    Modelo principal para almacenar itinerarios de viaje
+    """
+    # Campos básicos del itinerario
+    lugar = models.CharField(max_length=255, default='')
+    num_dias = models.IntegerField(default=1)
+    estado = models.CharField(max_length=20, default='borrador')
+    
+    # Relaciones con otras tablas (ahora opcionales)
+    pais = models.ForeignKey(Countries, on_delete=models.CASCADE, db_column='pais_id', null=True, blank=True)
+    transporte = models.ForeignKey(Transporte, on_delete=models.CASCADE, db_column='transporte_id', null=True, blank=True)
+    viaje = models.ForeignKey(Viaje, on_delete=models.CASCADE, db_column='viaje_id', null=True, blank=True)
+    
+    # Información del itinerario
+    titulo = models.CharField(max_length=200, default='')
+    descripcion = models.TextField(blank=True, null=True)
+    
+    # Fechas del viaje
+    fecha_inicio = models.DateField()
+    fecha_fin = models.DateField()
+    num_noches = models.IntegerField(default=0)
+    
+    # Presupuesto
+    presupuesto_total = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+    moneda_presupuesto = models.CharField(max_length=3, default='PEN')
+    nivel_precio_preferido = models.ForeignKey(
+        'NivelPrecio', 
+        on_delete=models.SET_NULL, 
+        null=True, 
+        blank=True,
+        db_column='nivel_precio_preferido_id'
+    )
+    
+    # Preferencias del usuario (JSON)
+    preferencias_actividades = models.JSONField(default=list)
+    preferencias_alimentacion = models.JSONField(default=list)
+    preferencias_alojamiento = models.JSONField(default=list)
+    
+    # Campos de control
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True, null=True, blank=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'itinerario'
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"{self.titulo} - {self.lugar}"
+
+    def calcular_costo_total(self):
+        """Calcula el costo total del itinerario"""
+        if self.presupuesto_total:
+            return self.presupuesto_total
+        return 0
+
+    def obtener_estadisticas(self):
+        """Obtiene estadísticas del itinerario"""
+        return {
+            'num_dias': self.num_dias,
+            'num_noches': self.num_noches,
+            'presupuesto': self.presupuesto_total,
+            'estado': self.estado
+        }
+
+class DiaItinerario(models.Model):
+    """
+    Representa un día específico del itinerario
+    """
+    itinerario = models.ForeignKey(
+        Itinerario, 
+        on_delete=models.CASCADE, 
+        related_name='dias'
+    )
+    dia_numero = models.IntegerField(help_text="Número del día (1, 2, 3, etc.)")
+    fecha = models.DateField()
+    
+    # Alojamiento para esta noche
+    hotel = models.ForeignKey(
+        'LugarGooglePlaces',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='dias_hotel',
+        limit_choices_to={'tipo_principal__in': ['hotel', 'lodging', 'inn']}
+    )
+    
+    # Campos de control
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        db_table = 'dia_itinerario'
+        unique_together = ['itinerario', 'dia_numero']
+        ordering = ['dia_numero']
+    
+    def __str__(self):
+        return f"Día {self.dia_numero} - {self.fecha}"
+    
+    def calcular_costo_dia(self):
+        """Calcula el costo total del día"""
+        total = 0
+        
+        # Costo del hotel
+        if self.hotel and self.hotel.nivel_precios:
+            if self.hotel.nivel_precios.rango_inferior:
+                total += float(self.hotel.nivel_precios.rango_inferior)
+        
+        # Costo de actividades
+        for actividad in self.actividades.all():
+            if actividad.costo_estimado:
+                total += float(actividad.costo_estimado)
+        
+        return total
+
+class ActividadItinerario(models.Model):
+    """
+    Representa una actividad específica en un día del itinerario
+    """
+    TIPOS_ACTIVIDAD = [
+        ('visita_turistica', 'Visita Turística'),
+        ('restaurante', 'Restaurante'),
+        ('cafe', 'Café'),
+        ('bar', 'Bar'),
+        ('shopping', 'Compras'),
+        ('entretenimiento', 'Entretenimiento'),
+        ('transporte', 'Transporte'),
+        ('descanso', 'Descanso'),
+        ('otro', 'Otro')
+    ]
+    
+    dia = models.ForeignKey(
+        DiaItinerario,
+        on_delete=models.CASCADE,
+        related_name='actividades'
+    )
+    
+    # Información de la actividad
+    tipo_actividad = models.CharField(max_length=30, choices=TIPOS_ACTIVIDAD)
+    lugar = models.ForeignKey(
+        'LugarGooglePlaces',
+        on_delete=models.CASCADE,
+        related_name='actividades_itinerario'
+    )
+    
+    # Horarios
+    hora_inicio = models.TimeField()
+    hora_fin = models.TimeField()
+    duracion_minutos = models.IntegerField(
+        help_text="Duración estimada en minutos"
+    )
+    
+    # Costos
+    costo_estimado = models.DecimalField(
+        max_digits=10, 
+        decimal_places=2, 
+        null=True, 
+        blank=True,
+        help_text="Costo estimado de la actividad"
+    )
+    
+    # Notas y descripción
+    descripcion = models.TextField(blank=True, null=True)
+    notas_adicionales = models.TextField(blank=True, null=True)
+    
+    # Orden en el día
+    orden = models.IntegerField(default=0)
+    
+    # Campos de control
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        db_table = 'actividad_itinerario'
+        ordering = ['dia', 'orden', 'hora_inicio']
+        unique_together = ['dia', 'orden']
+    
+    def __str__(self):
+        return f"{self.get_tipo_actividad_display()} - {self.lugar.nombre}"
+    
+    def es_compatible_horario(self):
+        """Verifica si la actividad es compatible con los horarios del lugar"""
+        if not self.lugar.horarios:
+            return True  # Si no hay horarios, asumir que está abierto
+        
+        # Obtener el día de la semana
+        from datetime import datetime
+        dia_semana = self.dia.fecha.strftime('%A').lower()
+        
+        # Buscar horarios para ese día
+        for horario in self.lugar.horarios:
+            if isinstance(horario, dict):
+                # Formato: {"day": "monday", "open": "09:00", "close": "18:00"}
+                if horario.get('day', '').lower() == dia_semana:
+                    hora_apertura = horario.get('open', '00:00')
+                    hora_cierre = horario.get('close', '23:59')
+                    
+                    # Verificar si la actividad está dentro del horario
+                    return hora_apertura <= self.hora_inicio.strftime('%H:%M') <= hora_cierre
+            elif isinstance(horario, str):
+                # Formato: "Monday: 9:00 AM – 6:00 PM"
+                if dia_semana in horario.lower():
+                    # Extraer horarios del string (implementación básica)
+                    return True  # Por ahora asumir que es compatible
+        
+        return False  # Si no se encuentra el día, asumir que está cerrado
 

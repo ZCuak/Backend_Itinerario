@@ -11,6 +11,10 @@ from .google_places_views import (
     lugares_cercanos, generar_resumen_ia, generar_resumenes_lotes_ia, 
     listar_lugares_con_resumenes
 )
+from .itinerario_views import (
+    generar_itinerario_api, obtener_itinerario_api, listar_itinerarios_api,
+    actualizar_itinerario_api, eliminar_itinerario_api, obtener_niveles_precio_api
+)
 
 # Rutas de autenticación
 auth_urlpatterns = [
@@ -38,6 +42,16 @@ registro_urlpatterns = [
     path('actividad-lugar/', registrar_actividad_lugar, name='registrar_actividad_lugar'),
 ]
 
+# Rutas del sistema de itinerarios inteligentes
+itinerario_urlpatterns = [
+    path('generar/', generar_itinerario_api, name='generar_itinerario_api'),
+    path('obtener/<int:itinerario_id>/', obtener_itinerario_api, name='obtener_itinerario_api'),
+    path('listar/', listar_itinerarios_api, name='listar_itinerarios_api'),
+    path('actualizar/<int:itinerario_id>/', actualizar_itinerario_api, name='actualizar_itinerario_api'),
+    path('eliminar/<int:itinerario_id>/', eliminar_itinerario_api, name='eliminar_itinerario_api'),
+    path('niveles-precio/', obtener_niveles_precio_api, name='obtener_niveles_precio_api'),
+]
+
 urlpatterns = [
     # Rutas básicas
     path('test/', connection_test, name='connection_test'),         
@@ -57,4 +71,5 @@ urlpatterns = [
     path('auth/', include(auth_urlpatterns)),
     path('places/', include(google_places_urlpatterns)),
     path('registrar/', include(registro_urlpatterns)),
+    path('itinerarios/', include(itinerario_urlpatterns)),
 ]
