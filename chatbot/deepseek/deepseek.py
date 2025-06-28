@@ -6,6 +6,52 @@ import json
 API_KEY = os.getenv("API_KEY_OPENAI")
 API_URL = "https://api.deepseek.com/v1/chat/completions"
 
+class DeepSeekClient:
+    """
+    Cliente para interactuar con la API de DeepSeek
+    """
+    
+    def __init__(self):
+        self.api_key = os.getenv("DEEPSEEK_API_KEY") or os.getenv("API_KEY_OPENAI")
+        self.api_url = "https://api.deepseek.com/v1/chat/completions"
+        self.model = os.getenv("DEEPSEEK_MODEL", "deepseek-chat")
+    
+    def generate_response(self, prompt: str, temperature: float = 0.3) -> str:
+        """
+        Genera una respuesta usando DeepSeek
+        
+        Args:
+            prompt: El prompt a enviar
+            temperature: Temperatura para la generación (0.0-1.0)
+        
+        Returns:
+            La respuesta generada
+        """
+        try:
+            headers = {
+                "Authorization": f"Bearer {self.api_key}",
+                "Content-Type": "application/json"
+            }
+
+            data = {
+                "model": self.model,
+                "messages": [{"role": "user", "content": prompt}],
+                "temperature": temperature
+            }
+
+            response = requests.post(self.api_url, headers=headers, json=data)
+
+            if response.status_code == 200:
+                respuesta = response.json()
+                return respuesta['choices'][0]['message']['content']
+            else:
+                print(f"Error {response.status_code}: {response.text}")
+                return None
+                
+        except Exception as e:
+            print(f"Error en DeepSeekClient: {e}")
+            return None
+
 def enviar_prompt(prompt_usuario):
     headers = {
         "Authorization": f"Bearer {API_KEY}",
