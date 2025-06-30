@@ -51,6 +51,7 @@ class GeneradorItinerarios:
             Dict con el itinerario generado
         """
         try:
+            print("🔍 VALIDANDO FECHAS...")
             # Validar fechas
             fecha_inicio_dt = datetime.strptime(fecha_inicio, '%Y-%m-%d').date()
             fecha_fin_dt = datetime.strptime(fecha_fin, '%Y-%m-%d').date()
@@ -62,10 +63,14 @@ class GeneradorItinerarios:
             num_dias = (fecha_fin_dt - fecha_inicio_dt).days + 1
             num_noches = num_dias - 1
             
+            print(f"✅ Fechas válidas - Duración: {num_dias} días, {num_noches} noches")
+            
             # Limpiar lugares seleccionados para este itinerario
             self.lugares_seleccionados_global.clear()
+            print("🧹 Limpiando lugares seleccionados anteriores...")
             
             # Paso 1: Determinar tipos de establecimientos con DeepSeek
+            print("\n🤖 CONSULTANDO DEEPSEEK PARA TIPOS DE ESTABLECIMIENTOS...")
             self.logger.info(f"🔍 Determinando tipos de establecimientos para: {preferencias_usuario}")
             tipos_establecimientos = self.deepseek.determinar_tipos_establecimientos(
                 preferencias_usuario=preferencias_usuario,
@@ -73,7 +78,12 @@ class GeneradorItinerarios:
                 nivel_precio=nivel_precio_preferido
             )
             
+            print("✅ Tipos de establecimientos determinados:")
+            for categoria, tipos in tipos_establecimientos.items():
+                print(f"   - {categoria}: {', '.join(tipos)}")
+            
             # Crear itinerario en BD
+            print(f"\n💾 CREANDO ITINERARIO EN BASE DE DATOS...")
             itinerario = self._crear_itinerario(
                 titulo=titulo,
                 fecha_inicio=fecha_inicio_dt,
@@ -86,11 +96,15 @@ class GeneradorItinerarios:
                 preferencias_alimentacion=tipos_establecimientos.get('alimentacion', []),
                 preferencias_alojamiento=tipos_establecimientos.get('alojamiento', [])
             )
+            print(f"✅ Itinerario creado con ID: {itinerario.id}")
             
             # Generar días del itinerario
+            print(f"\n📅 GENERANDO {num_dias} DÍAS DEL ITINERARIO...")
             dias_generados = []
             for dia_num in range(1, num_dias + 1):
                 fecha_dia = fecha_inicio_dt + timedelta(days=dia_num - 1)
+                
+                print(f"\n🌅 GENERANDO DÍA {dia_num} - {fecha_dia}")
                 
                 # Generar día
                 dia_itinerario = self._generar_dia_itinerario(
@@ -105,9 +119,19 @@ class GeneradorItinerarios:
                 )
                 
                 dias_generados.append(dia_itinerario)
+                print(f"✅ Día {dia_num} generado exitosamente")
             
             # Calcular estadísticas finales
+            print(f"\n📊 CALCULANDO ESTADÍSTICAS FINALES...")
             estadisticas = itinerario.obtener_estadisticas()
+            print(f"✅ Estadísticas calculadas")
+            
+            print(f"\n🎉 ¡ITINERARIO COMPLETADO!")
+            print(f"📋 Título: {itinerario.titulo}")
+            print(f"🆔 ID: {itinerario.id}")
+            print(f"📅 Período: {fecha_inicio} a {fecha_fin}")
+            print(f"💰 Presupuesto: S/. {presupuesto_total}")
+            print("=" * 60)
             
             return {
                 'success': True,
@@ -129,6 +153,7 @@ class GeneradorItinerarios:
             }
             
         except Exception as e:
+            print(f"❌ ERROR EN GENERACIÓN: {e}")
             self.logger.error(f"Error generando itinerario: {e}")
             return {
                 'success': False,
@@ -184,15 +209,18 @@ class GeneradorItinerarios:
     ) -> DiaItinerario:
         """Genera un día específico del itinerario"""
         
+        print(f"   📝 Creando día {dia_numero} en base de datos...")
         # Crear día
         dia_itinerario = DiaItinerario.objects.create(
             itinerario=itinerario,
             dia_numero=dia_numero,
             fecha=fecha
         )
+        print(f"   ✅ Día {dia_numero} creado")
         
         # Seleccionar hotel para esta noche (excepto último día)
         if not es_ultimo_dia:
+            print(f"   🏨 Buscando hotel para la noche {dia_numero}...")
             hotel = self._seleccionar_hotel_inteligente(
                 tipos_alojamiento=tipos_establecimientos.get('alojamiento', []),
                 nivel_precio=nivel_precio,
@@ -201,15 +229,25 @@ class GeneradorItinerarios:
             if hotel:
                 dia_itinerario.hotel = hotel
                 dia_itinerario.save()
+                print(f"   ✅ Hotel seleccionado: {hotel.nombre}")
+            else:
+                print(f"   ⚠️  No se encontró hotel para la noche {dia_numero}")
+        else:
+            print(f"   🏨 Día {dia_numero} es el último - no se asigna hotel")
         
         # Generar actividades del día
+        print(f"   🎯 Generando actividades para el día {dia_numero}...")
         actividades = self._generar_actividades_dia_inteligente(
             dia_itinerario=dia_itinerario,
             presupuesto_diario=presupuesto_diario,
             nivel_precio=nivel_precio,
             preferencias_usuario=preferencias_usuario,
-            tipos_establecimientos=tipos_establecimientos
+            tipos_establecimientos=tipos_establecimientos,
+            es_primer_dia=(dia_numero == 1),
+            hotel=hotel
         )
+        
+        print(f"   ✅ {len(actividades)} actividades generadas para el día {dia_numero}")
         
         return dia_itinerario
     
@@ -221,6 +259,8 @@ class GeneradorItinerarios:
     ) -> Optional[LugarGooglePlaces]:
         """Selecciona un hotel apropiado usando DeepSeek"""
         
+        print(f"      🔍 Buscando hoteles con tipos: {tipos_alojamiento}")
+        
         # Construir query base
         query = LugarGooglePlaces.objects.filter(
             is_active=True,
@@ -229,13 +269,20 @@ class GeneradorItinerarios:
         
         # Filtrar por tipos de alojamiento usando tipo_principal y tipos_adicionales
         if tipos_alojamiento:
-            # Buscar en tipo_principal O en tipos_adicionales
-            query = query.filter(
-                Q(tipo_principal__in=tipos_alojamiento) |
-                Q(tipos_adicionales__overlap=tipos_alojamiento)
-            )
+            # Crear una consulta OR para buscar en tipo_principal O en tipos_adicionales
+            query_or = Q()
+            
+            for tipo in tipos_alojamiento:
+                # Buscar en tipo_principal
+                query_or |= Q(tipo_principal=tipo)
+                # Buscar en tipos_adicionales (si es una lista)
+                query_or |= Q(tipos_adicionales__contains=[tipo])
+            
+            query = query.filter(query_or)
+            print(f"      🔍 Filtro aplicado: buscando lugares con al menos uno de {tipos_alojamiento}")
         else:
             # Fallback a tipos básicos
+            print(f"      ⚠️  No hay tipos específicos, usando fallback")
             query = query.filter(
                 Q(tipo_principal__in=['hotel', 'lodging', 'inn']) |
                 Q(tipos_adicionales__contains=['hotel', 'lodging', 'inn'])
@@ -243,19 +290,24 @@ class GeneradorItinerarios:
         
         # Filtrar por nivel de precio
         if nivel_precio is not None:
+            print(f"      💰 Filtrando por nivel de precio: {nivel_precio}")
             query = query.filter(nivel_precios__nivel__lte=nivel_precio)
         
         # Excluir lugares ya seleccionados
         if self.lugares_seleccionados_global:
+            print(f"      🚫 Excluyendo {len(self.lugares_seleccionados_global)} lugares ya seleccionados")
             query = query.exclude(id__in=self.lugares_seleccionados_global)
         
         # Obtener candidatos
         candidatos = list(query.order_by('-rating', '-total_ratings')[:10])
+        print(f"      📋 Encontrados {len(candidatos)} candidatos")
         
         if not candidatos:
+            print(f"      ❌ No se encontraron candidatos de hotel")
             return None
         
         # Convertir a formato para DeepSeek
+        print(f"      🤖 Preparando datos para DeepSeek...")
         candidatos_data = []
         for candidato in candidatos:
             candidato_data = {
@@ -275,6 +327,7 @@ class GeneradorItinerarios:
             candidatos_data.append(candidato_data)
         
         # Usar DeepSeek para seleccionar el mejor hotel
+        print(f"      🧠 Consultando DeepSeek para selección inteligente...")
         hoteles_seleccionados = self.deepseek.seleccionar_lugares_itinerario(
             lugares_candidatos=candidatos_data,
             tipo_actividad='alojamiento',
@@ -287,8 +340,11 @@ class GeneradorItinerarios:
             hotel_id = hoteles_seleccionados[0].get('id')
             # Agregar a lugares seleccionados
             self.lugares_seleccionados_global.add(hotel_id)
-            return LugarGooglePlaces.objects.get(id=hotel_id)
+            hotel_seleccionado = LugarGooglePlaces.objects.get(id=hotel_id)
+            print(f"      ✅ Hotel seleccionado por DeepSeek: {hotel_seleccionado.nombre}")
+            return hotel_seleccionado
         
+        print(f"      ❌ DeepSeek no pudo seleccionar un hotel")
         return None
     
     def _generar_actividades_dia_inteligente(
@@ -297,20 +353,68 @@ class GeneradorItinerarios:
         presupuesto_diario: Optional[float],
         nivel_precio: Optional[int],
         preferencias_usuario: str,
-        tipos_establecimientos: Dict[str, List[str]]
+        tipos_establecimientos: Dict[str, List[str]],
+        es_primer_dia: bool = False,
+        hotel: Optional[LugarGooglePlaces] = None
     ) -> List[ActividadItinerario]:
         """Genera las actividades para un día específico usando DeepSeek"""
         
+        print(f"      📋 Distribuyendo actividades para el día...")
         # Distribuir actividades a lo largo del día
         tipos_actividades_dia = self._distribuir_actividades_dia_inteligente(
             tipos_establecimientos=tipos_establecimientos,
-            preferencias_usuario=preferencias_usuario
+            preferencias_usuario=preferencias_usuario,
+            es_primer_dia=es_primer_dia,
+            hotel=hotel
         )
+        
+        print(f"      🎯 Tipos de actividades planificadas: {tipos_actividades_dia}")
         
         actividades = []
         orden = 1
         
         for tipo_actividad in tipos_actividades_dia:
+            print(f"      🔍 Procesando actividad: {tipo_actividad}")
+            
+            # Manejar casos especiales
+            if tipo_actividad == 'checkin_hotel':
+                print(f"      🏨 Creando actividad de check-in al hotel")
+                # Crear actividad de check-in
+                actividad = ActividadItinerario.objects.create(
+                    dia=dia_itinerario,
+                    tipo_actividad='visita_turistica',  # Usar tipo genérico
+                    lugar=dia_itinerario.hotel,
+                    hora_inicio=time(7, 0),  # 7:00 AM
+                    hora_fin=time(8, 0),     # 8:00 AM
+                    duracion_minutos=60,
+                    costo_estimado=0,  # Check-in es gratis
+                    orden=orden,
+                    descripcion=f"Check-in al hotel {dia_itinerario.hotel.nombre}"
+                )
+                actividades.append(actividad)
+                print(f"      ✅ Check-in creado: 07:00-08:00 {dia_itinerario.hotel.nombre}")
+                orden += 1
+                continue
+            
+            elif tipo_actividad == 'desayuno_hotel':
+                print(f"      🍳 Creando actividad de desayuno en el hotel")
+                # Crear actividad de desayuno en hotel
+                actividad = ActividadItinerario.objects.create(
+                    dia=dia_itinerario,
+                    tipo_actividad='restaurante',
+                    lugar=dia_itinerario.hotel,
+                    hora_inicio=time(8, 0),  # 8:00 AM
+                    hora_fin=time(9, 0),     # 9:00 AM
+                    duracion_minutos=60,
+                    costo_estimado=30,  # Desayuno típico en hotel
+                    orden=orden,
+                    descripcion=f"Desayuno en el hotel {dia_itinerario.hotel.nombre}"
+                )
+                actividades.append(actividad)
+                print(f"      ✅ Desayuno en hotel creado: 08:00-09:00 {dia_itinerario.hotel.nombre}")
+                orden += 1
+                continue
+            
             # Seleccionar lugares para esta actividad
             lugares_seleccionados = self._seleccionar_lugares_actividad_inteligente(
                 tipo_actividad=tipo_actividad,
@@ -322,7 +426,10 @@ class GeneradorItinerarios:
             )
             
             if lugares_seleccionados:
+                print(f"      ✅ Encontrados {len(lugares_seleccionados)} lugares para {tipo_actividad}")
+                
                 # Usar DeepSeek para optimizar la distribución
+                print(f"      🧠 Optimizando distribución con DeepSeek...")
                 actividades_propuestas = []
                 for lugar in lugares_seleccionados:
                     actividad_propuesta = {
@@ -340,12 +447,22 @@ class GeneradorItinerarios:
                     presupuesto_diario=presupuesto_diario
                 )
                 
+                # Validar que no haya superposiciones
+                if not self._validar_horarios_sin_superposicion(actividades_optimizadas):
+                    print(f"      ⚠️  Usando distribución de fallback debido a superposiciones")
+                    # Usar distribución de fallback
+                    actividades_optimizadas = self._distribucion_fallback(actividades_propuestas, orden)
+                
+                print(f"      💾 Creando actividades en base de datos...")
                 # Crear actividades en BD
                 for actividad_opt in actividades_optimizadas:
                     lugar_id = actividad_opt.get('id')
+                    print(f"      🔍 Buscando lugar con ID: {lugar_id} en {len(lugares_seleccionados)} lugares seleccionados")
+                    
                     lugar = next((l for l in lugares_seleccionados if l.get('id') == lugar_id), None)
                     
                     if lugar:
+                        print(f"      ✅ Encontrado lugar: {lugar.get('nombre')}")
                         # Calcular costo estimado
                         costo_estimado = self._calcular_costo_actividad(
                             lugar=lugar,
@@ -367,48 +484,79 @@ class GeneradorItinerarios:
                         )
                         
                         actividades.append(actividad)
+                        print(f"      ✅ Actividad {orden} creada: {actividad_opt['hora_inicio']}-{actividad_opt['hora_fin']} {lugar.get('nombre')}")
                         orden += 1
+                    else:
+                        print(f"      ❌ No se encontró lugar con ID: {lugar_id}")
+                        print(f"      📋 IDs disponibles: {[l.get('id') for l in lugares_seleccionados]}")
+                        print(f"      📋 IDs en actividades optimizadas: {[a.get('id') for a in actividades_optimizadas]}")
+            else:
+                print(f"      ⚠️  No se encontraron lugares para {tipo_actividad}")
         
+        print(f"      🎉 Total de actividades creadas: {len(actividades)}")
         return actividades
     
     def _distribuir_actividades_dia_inteligente(
         self,
         tipos_establecimientos: Dict[str, List[str]],
-        preferencias_usuario: str
+        preferencias_usuario: str,
+        es_primer_dia: bool = False,
+        hotel: Optional[LugarGooglePlaces] = None
     ) -> List[str]:
         """Distribuye las actividades a lo largo del día de forma inteligente"""
         
         actividades = []
         
-        # Desayuno
-        if tipos_establecimientos.get('alimentacion'):
-            actividades.append('restaurante')
+        # Primer día: Check-in al hotel
+        if es_primer_dia:
+            actividades.append('checkin_hotel')
+            print(f"      🏨 Agregando check-in al hotel para el primer día")
         
-        # Actividades de la mañana (puntos de interés)
+        # Desayuno (solo una vez)
+        if tipos_establecimientos.get('alimentacion'):
+            # Si es primer día y el hotel tiene restaurante, desayunar ahí
+            if es_primer_dia and hotel and self._hotel_tiene_restaurante(hotel):
+                actividades.append('desayuno_hotel')
+                print(f"      🍳 Desayuno en el hotel: {hotel.nombre}")
+            else:
+                actividades.append('restaurante')
+                print(f"      🍳 Desayuno en restaurante externo")
+        
+        # Actividades de la mañana (puntos de interés) - máximo 2
         if tipos_establecimientos.get('puntos_interes'):
-            actividades.extend(['visita_turistica', 'visita_turistica'])
+            actividades.append('visita_turistica')
+            # Solo agregar una segunda visita si hay suficientes lugares diferentes
+            if len(tipos_establecimientos.get('puntos_interes', [])) > 1:
+                actividades.append('visita_turistica')
         
-        # Almuerzo
+        # Almuerzo (solo una vez) - siempre en restaurante externo
         if tipos_establecimientos.get('alimentacion'):
             actividades.append('restaurante')
         
-        # Actividades de la tarde
+        # Actividades de la tarde (máximo 1)
         if tipos_establecimientos.get('puntos_interes'):
             actividades.append('visita_turistica')
         
-        # Compras
+        # Compras (solo una vez)
         if tipos_establecimientos.get('compras'):
             actividades.append('shopping')
         
-        # Cena
+        # Cena (solo una vez)
         if tipos_establecimientos.get('alimentacion'):
             actividades.append('restaurante')
         
-        # Actividad nocturna
+        # Actividad nocturna (solo una vez)
         if tipos_establecimientos.get('alimentacion'):
             actividades.append('bar')
         
+        print(f"      📅 Actividades distribuidas: {actividades}")
         return actividades
+    
+    def _hotel_tiene_restaurante(self, hotel: LugarGooglePlaces) -> bool:
+        """Verifica si el hotel tiene restaurante"""
+        # Verificar en tipos_adicionales si tiene restaurante
+        tipos_restaurante = ['restaurant', 'food', 'dining']
+        return any(tipo in hotel.tipos_adicionales for tipo in tipos_restaurante)
     
     def _seleccionar_lugares_actividad_inteligente(
         self,
@@ -421,6 +569,8 @@ class GeneradorItinerarios:
     ) -> List[Dict[str, Any]]:
         """Selecciona lugares apropiados para una actividad usando DeepSeek"""
         
+        print(f"        🔍 Buscando lugares para: {tipo_actividad}")
+        
         # Mapear tipo de actividad a categorías de establecimientos
         mapeo_actividad = {
             'visita_turistica': tipos_establecimientos.get('puntos_interes', []),
@@ -432,6 +582,7 @@ class GeneradorItinerarios:
         }
         
         tipos_buscar = mapeo_actividad.get(tipo_actividad, ['point_of_interest'])
+        print(f"        🎯 Tipos a buscar: {tipos_buscar}")
         
         # Construir query
         query = LugarGooglePlaces.objects.filter(
@@ -441,12 +592,20 @@ class GeneradorItinerarios:
         
         # Filtrar por tipos usando tipo_principal y tipos_adicionales
         if tipos_buscar:
-            query = query.filter(
-                Q(tipo_principal__in=tipos_buscar) |
-                Q(tipos_adicionales__overlap=tipos_buscar)
-            )
+            # Crear una consulta OR para buscar en tipo_principal O en tipos_adicionales
+            query_or = Q()
+            
+            for tipo in tipos_buscar:
+                # Buscar en tipo_principal
+                query_or |= Q(tipo_principal=tipo)
+                # Buscar en tipos_adicionales (si es una lista)
+                query_or |= Q(tipos_adicionales__contains=[tipo])
+            
+            query = query.filter(query_or)
+            print(f"        🔍 Filtro aplicado: buscando lugares con al menos uno de {tipos_buscar}")
         else:
             # Fallback para puntos de interés
+            print(f"        ⚠️  Usando fallback para puntos de interés")
             query = query.filter(
                 Q(tipo_principal='point_of_interest') |
                 Q(tipos_adicionales__contains=['point_of_interest'])
@@ -454,20 +613,31 @@ class GeneradorItinerarios:
         
         # Filtrar por nivel de precio
         if nivel_precio is not None:
+            print(f"        💰 Filtrando por nivel de precio: {nivel_precio}")
             query = query.filter(nivel_precios__nivel__lte=nivel_precio)
         
         # Para restaurantes, asegurar variedad - excluir lugares ya seleccionados
         if tipo_actividad == 'restaurante':
             if self.lugares_seleccionados_global:
+                print(f"        🚫 Excluyendo restaurantes ya seleccionados para variedad")
+                query = query.exclude(id__in=self.lugares_seleccionados_global)
+        
+        # Para visitas turísticas, también evitar duplicados
+        if tipo_actividad == 'visita_turistica':
+            if self.lugares_seleccionados_global:
+                print(f"        🚫 Excluyendo lugares turísticos ya seleccionados para variedad")
                 query = query.exclude(id__in=self.lugares_seleccionados_global)
         
         # Obtener candidatos
         candidatos = list(query.order_by('-rating', '-total_ratings')[:15])
+        print(f"        📋 Encontrados {len(candidatos)} candidatos")
         
         if not candidatos:
+            print(f"        ❌ No se encontraron candidatos para {tipo_actividad}")
             return []
         
         # Convertir a formato para DeepSeek
+        print(f"        🤖 Preparando datos para DeepSeek...")
         candidatos_data = []
         for candidato in candidatos:
             candidato_data = {
@@ -488,6 +658,7 @@ class GeneradorItinerarios:
         
         # Usar DeepSeek para seleccionar los mejores lugares
         max_lugares = 2 if tipo_actividad == 'restaurante' else 1  # Más opciones para restaurantes
+        print(f"        🧠 Consultando DeepSeek para seleccionar hasta {max_lugares} lugares...")
         lugares_seleccionados = self.deepseek.seleccionar_lugares_itinerario(
             lugares_candidatos=candidatos_data,
             tipo_actividad=tipo_actividad,
@@ -499,6 +670,10 @@ class GeneradorItinerarios:
         # Agregar lugares seleccionados al conjunto global
         for lugar in lugares_seleccionados:
             self.lugares_seleccionados_global.add(lugar.get('id'))
+        
+        print(f"        ✅ DeepSeek seleccionó {len(lugares_seleccionados)} lugares para {tipo_actividad}")
+        for lugar in lugares_seleccionados:
+            print(f"          - {lugar.get('nombre')}")
         
         return lugares_seleccionados
     
@@ -577,4 +752,62 @@ class GeneradorItinerarios:
                 for actividad in dia.actividades.all()
             ],
             'costo_total_dia': dia.calcular_costo_dia()
-        } 
+        }
+    
+    def _validar_horarios_sin_superposicion(self, actividades_optimizadas: List[Dict[str, Any]]) -> bool:
+        """Valida que no haya superposiciones de horarios entre actividades"""
+        from datetime import datetime
+        
+        horarios = []
+        for actividad in actividades_optimizadas:
+            try:
+                hora_inicio = datetime.strptime(actividad.get('hora_inicio', '09:00'), '%H:%M')
+                hora_fin = datetime.strptime(actividad.get('hora_fin', '10:00'), '%H:%M')
+                horarios.append((hora_inicio, hora_fin, actividad.get('id')))
+            except:
+                continue
+        
+        # Verificar superposiciones
+        for i, (inicio1, fin1, id1) in enumerate(horarios):
+            for j, (inicio2, fin2, id2) in enumerate(horarios):
+                if i != j:
+                    # Si hay superposición
+                    if (inicio1 < fin2 and fin1 > inicio2):
+                        print(f"      ⚠️  SUPERPOSICIÓN DETECTADA:")
+                        print(f"         Actividad {id1}: {inicio1.strftime('%H:%M')}-{fin1.strftime('%H:%M')}")
+                        print(f"         Actividad {id2}: {inicio2.strftime('%H:%M')}-{fin2.strftime('%H:%M')}")
+                        return False
+        
+        print(f"      ✅ No se detectaron superposiciones de horarios")
+        return True
+    
+    def _distribucion_fallback(self, actividades_propuestas: List[Dict[str, Any]], orden_inicial: int) -> List[Dict[str, Any]]:
+        """Distribución de fallback sin superposiciones"""
+        
+        horarios_base = [
+            ('07:00', '08:00', 60),   # Check-in hotel (si es primer día)
+            ('08:00', '09:00', 60),   # Desayuno
+            ('09:00', '11:00', 120),  # Visita mañana
+            ('12:30', '13:30', 60),   # Almuerzo
+            ('14:00', '16:00', 120),  # Visita tarde
+            ('16:30', '17:30', 60),   # Compras
+            ('19:00', '20:00', 60),   # Cena
+            ('20:30', '22:00', 90),   # Bar
+        ]
+        
+        actividades_optimizadas = []
+        orden = orden_inicial
+        
+        for i, actividad in enumerate(actividades_propuestas):
+            if i < len(horarios_base):
+                hora_inicio, hora_fin, duracion = horarios_base[i]
+                actividades_optimizadas.append({
+                    'id': actividad.get('id'),
+                    'hora_inicio': hora_inicio,
+                    'hora_fin': hora_fin,
+                    'duracion_minutos': duracion,
+                    'descripcion': f"Actividad {actividad.get('tipo_actividad', 'general')} - Distribución automática"
+                })
+                orden += 1
+        
+        return actividades_optimizadas 

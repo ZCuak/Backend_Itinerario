@@ -22,6 +22,9 @@ def generar_itinerario_api(request):
     Genera un itinerario completo basado en las preferencias del usuario
     """
     try:
+        print("🚀 INICIANDO GENERACIÓN DE ITINERARIO")
+        print("=" * 50)
+        
         data = json.loads(request.body)
         
         # Validar campos requeridos
@@ -29,13 +32,19 @@ def generar_itinerario_api(request):
         fecha_fin = data.get('fecha_fin')
         preferencias_usuario = data.get('preferencias_usuario')
         
+        print(f"📅 Fecha inicio: {fecha_inicio}")
+        print(f"📅 Fecha fin: {fecha_fin}")
+        print(f"🎯 Preferencias: {preferencias_usuario}")
+        
         if not fecha_inicio or not fecha_fin:
+            print("❌ ERROR: Fechas requeridas faltantes")
             return JsonResponse({
                 'success': False,
                 'error': 'Se requieren fecha_inicio y fecha_fin'
             }, status=400)
         
         if not preferencias_usuario:
+            print("❌ ERROR: Preferencias del usuario faltantes")
             return JsonResponse({
                 'success': False,
                 'error': 'Se requieren las preferencias del usuario'
@@ -46,16 +55,25 @@ def generar_itinerario_api(request):
         nivel_precio_preferido = data.get('nivel_precio_preferido')
         titulo = data.get('titulo', 'Mi Viaje')
         
+        print(f"💰 Presupuesto: S/. {presupuesto_total}")
+        print(f"⭐ Nivel precio: {nivel_precio_preferido}")
+        print(f"📝 Título: {titulo}")
+        
         # Validar nivel de precio
         if nivel_precio_preferido is not None:
             if not isinstance(nivel_precio_preferido, int) or nivel_precio_preferido < 1 or nivel_precio_preferido > 4:
+                print("❌ ERROR: Nivel de precio inválido")
                 return JsonResponse({
                     'success': False,
                     'error': 'nivel_precio_preferido debe ser un número entre 1 y 4'
                 }, status=400)
         
+        print("\n🔧 CREANDO GENERADOR DE ITINERARIOS...")
+        
         # Generar itinerario
         generador = GeneradorItinerarios()
+        
+        print("🎯 LLAMANDO AL SERVICIO DE GENERACIÓN...")
         resultado = generador.generar_itinerario(
             fecha_inicio=fecha_inicio,
             fecha_fin=fecha_fin,
@@ -66,19 +84,32 @@ def generar_itinerario_api(request):
         )
         
         if resultado['success']:
+            print("✅ ¡ITINERARIO GENERADO EXITOSAMENTE!")
+            print(f"🆔 ID del itinerario: {resultado['itinerario']['id']}")
+            print(f"📊 Estadísticas:")
+            print(f"   - Costo total: S/. {resultado['itinerario']['estadisticas'].get('costo_total', 'N/A')}")
+            print(f"   - Actividades totales: {resultado['itinerario']['estadisticas'].get('total_actividades', 'N/A')}")
+            print(f"   - Actividades por día: {resultado['itinerario']['estadisticas'].get('actividades_por_dia', 'N/A')}")
+            print("=" * 50)
+            
             logger.info(f"✅ Itinerario generado exitosamente - ID: {resultado['itinerario']['id']}")
             return JsonResponse(resultado, status=200)
         else:
+            print(f"❌ ERROR EN LA GENERACIÓN: {resultado['error']}")
+            print("=" * 50)
             logger.error(f"❌ Error generando itinerario: {resultado['error']}")
             return JsonResponse(resultado, status=500)
             
     except json.JSONDecodeError:
+        print("❌ ERROR: JSON inválido en el body del request")
         return JsonResponse({
             'success': False,
             'error': 'JSON inválido en el body del request'
         }, status=400)
         
     except Exception as e:
+        print(f"❌ ERROR INESPERADO: {e}")
+        print("=" * 50)
         logger.error(f"❌ Error inesperado en generar_itinerario_api: {e}")
         return JsonResponse({
             'success': False,

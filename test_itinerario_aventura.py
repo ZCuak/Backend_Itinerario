@@ -20,7 +20,7 @@ def test_generar_itinerario_aventura():
         "preferencias_usuario": "Quiero un viaje lleno de aventura, deportes extremos, actividades al aire libre y experiencias emocionantes",
         "presupuesto_total": 900.0,
         "nivel_precio_preferido": 2,  # Moderado
-        "titulo": "Aventura Extrema en Lima"
+        "titulo": "Aventura Extrema en Chiclayo"
     }
     
     print("🎯 Generando itinerario de aventura...")
@@ -35,7 +35,6 @@ def test_generar_itinerario_aventura():
             'http://localhost:8000/api/itinerarios/generar/',
             headers={'Content-Type': 'application/json'},
             json=datos_itinerario,
-            timeout=60  # 60 segundos de timeout
         )
         
         print(f"📡 Status Code: {response.status_code}")
@@ -48,9 +47,11 @@ def test_generar_itinerario_aventura():
                 print(f"🆔 ID del itinerario: {resultado['itinerario']['id']}")
                 print(f"📋 Título: {resultado['itinerario']['titulo']}")
                 print(f"📊 Estadísticas:")
-                print(f"   - Costo total: S/. {resultado['itinerario']['estadisticas']['costo_total']}")
-                print(f"   - Actividades totales: {resultado['itinerario']['estadisticas']['total_actividades']}")
-                print(f"   - Actividades por día: {resultado['itinerario']['estadisticas']['actividades_por_dia']}")
+                estadisticas = resultado['itinerario']['estadisticas']
+                print(f"   - Número de días: {estadisticas.get('num_dias', 'N/A')}")
+                print(f"   - Número de noches: {estadisticas.get('num_noches', 'N/A')}")
+                print(f"   - Presupuesto: S/. {estadisticas.get('presupuesto', 'N/A')}")
+                print(f"   - Estado: {estadisticas.get('estado', 'N/A')}")
                 
                 print("\n🏨 Tipos de establecimientos seleccionados:")
                 tipos = resultado['itinerario']['tipos_establecimientos_seleccionados']

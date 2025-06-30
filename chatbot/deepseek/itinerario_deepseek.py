@@ -3,6 +3,7 @@ Integración de DeepSeek para generación inteligente de itinerarios
 """
 import logging
 import json
+import re
 from typing import List, Dict, Any, Optional
 from .deepseek import DeepSeekClient
 
@@ -17,6 +18,28 @@ class ItinerarioDeepSeek:
     def __init__(self):
         self.client = DeepSeekClient()
         self.logger = logging.getLogger(__name__)
+    
+    def _limpiar_respuesta_json(self, response: str) -> str:
+        """
+        Limpia la respuesta de DeepSeek eliminando bloques de código markdown
+        
+        Args:
+            response: Respuesta de DeepSeek
+            
+        Returns:
+            Respuesta limpia lista para parsear como JSON
+        """
+        if not response:
+            return response
+        
+        # Eliminar bloques de código markdown (```json ... ```)
+        response_limpia = re.sub(r'```json\s*', '', response)
+        response_limpia = re.sub(r'```\s*$', '', response_limpia)
+        
+        # Eliminar espacios en blanco al inicio y final
+        response_limpia = response_limpia.strip()
+        
+        return response_limpia
     
     def determinar_tipos_establecimientos(
         self,
@@ -73,24 +96,39 @@ class ItinerarioDeepSeek:
         """
         
         try:
+            print(f"        🤖 Enviando prompt a DeepSeek para tipos de establecimientos...")
             response = self.client.generate_response(prompt)
             
+            # Validar respuesta
+            if not response:
+                print(f"        ❌ DeepSeek devolvió respuesta vacía")
+                raise ValueError("Respuesta vacía de DeepSeek")
+            
+            print(f"        📄 Respuesta recibida de DeepSeek (primeros 100 chars): {response[:100]}...")
+            
             # Parsear respuesta JSON
-            tipos_establecimientos = json.loads(response)
+            tipos_establecimientos = json.loads(self._limpiar_respuesta_json(response))
             
             self.logger.info(f"Tipos de establecimientos determinados: {tipos_establecimientos}")
             return tipos_establecimientos
             
-        except Exception as e:
-            self.logger.error(f"Error determinando tipos de establecimientos: {e}")
+        except json.JSONDecodeError as e:
+            print(f"        ❌ Error parseando JSON de DeepSeek: {e}")
+            print(f"        📄 Respuesta completa: {response}")
+            self.logger.error(f"Error parseando JSON de DeepSeek: {e}. Respuesta: {response}")
             
-            # Fallback con tipos básicos
-            return {
-                "alojamiento": ["hotel", "resort"],
-                "alimentacion": ["restaurant", "cafe", "bar"],
-                "puntos_interes": ["tourist_attraction", "museum", "park"],
-                "compras": ["shopping_mall", "store"]
-            }
+        except Exception as e:
+            print(f"        ❌ Error en DeepSeek: {e}")
+            self.logger.error(f"Error determinando tipos de establecimientos: {e}")
+        
+        # Fallback con tipos básicos
+        print(f"        🔄 Usando tipos de establecimientos por defecto")
+        return {
+            "alojamiento": ["hotel", "resort"],
+            "alimentacion": ["restaurant", "cafe", "bar"],
+            "puntos_interes": ["tourist_attraction", "museum", "park"],
+            "compras": ["shopping_mall", "store"]
+        }
     
     def seleccionar_lugares_itinerario(
         self,
@@ -134,7 +172,7 @@ class ItinerarioDeepSeek:
         candidatos_info = []
         for i, lugar in enumerate(lugares_candidatos):
             candidato_info = f"""
-            CANDIDATO {i+1}:
+            CANDIDATO {i+1} (ID: {lugar.get('id', 'N/A')}):
             - Nombre: {lugar.get('nombre', 'N/A')}
             - Tipo: {lugar.get('tipo_principal', 'N/A')} + {', '.join(lugar.get('tipos_adicionales', []))}
             - Rating: {lugar.get('rating', 0)}/5
@@ -170,11 +208,13 @@ class ItinerarioDeepSeek:
         - Para ALOJAMIENTO: Priorizar comodidad y servicios
         - Para COMPRAS: Priorizar variedad de productos
 
+        IMPORTANTE: Usa el ID numérico exacto del candidato (no "CANDIDATO X")
+
         RESPONDE EN FORMATO JSON con los IDs de los lugares seleccionados:
         {{
             "lugares_seleccionados": [
                 {{
-                    "id": ID_DEL_LUGAR,
+                    "id": ID_NUMERICO_DEL_LUGAR,
                     "razon_seleccion": "Explicación de por qué fue seleccionado"
                 }}
             ]
@@ -184,39 +224,67 @@ class ItinerarioDeepSeek:
         """
         
         try:
+            print(f"        🤖 Enviando prompt a DeepSeek para seleccionar lugares...")
             response = self.client.generate_response(prompt)
             
+            # Validar respuesta
+            if not response:
+                print(f"        ❌ DeepSeek devolvió respuesta vacía")
+                raise ValueError("Respuesta vacía de DeepSeek")
+            
+            print(f"        📄 Respuesta recibida de DeepSeek (primeros 100 chars): {response[:100]}...")
+            
             # Parsear respuesta JSON
-            resultado = json.loads(response)
+            resultado = json.loads(self._limpiar_respuesta_json(response))
             
             lugares_seleccionados = resultado.get('lugares_seleccionados', [])
             
             # Obtener los lugares completos
             lugares_finales = []
+            print(f"        🔍 Procesando {len(lugares_seleccionados)} lugares seleccionados por DeepSeek")
+            
             for seleccion in lugares_seleccionados:
                 lugar_id = seleccion.get('id')
-                lugar_completo = next(
-                    (l for l in lugares_candidatos if l.get('id') == lugar_id),
-                    None
-                )
+                print(f"        🔍 Buscando lugar con ID: {lugar_id} (tipo: {type(lugar_id)})")
+                
+                # Buscar el lugar en los candidatos
+                lugar_completo = None
+                for candidato in lugares_candidatos:
+                    candidato_id = candidato.get('id')
+                    print(f"        🔍 Comparando con candidato ID: {candidato_id} (tipo: {type(candidato_id)})")
+                    if candidato_id == lugar_id:
+                        lugar_completo = candidato
+                        print(f"        ✅ Encontrado lugar: {candidato.get('nombre')}")
+                        break
+                
                 if lugar_completo:
                     lugar_completo['razon_seleccion'] = seleccion.get('razon_seleccion', '')
                     lugares_finales.append(lugar_completo)
+                else:
+                    print(f"        ❌ No se encontró lugar con ID: {lugar_id}")
+                    print(f"        📋 IDs disponibles: {[c.get('id') for c in lugares_candidatos]}")
             
             self.logger.info(f"Seleccionados {len(lugares_finales)} lugares para {tipo_actividad}")
             return lugares_finales
             
+        except json.JSONDecodeError as e:
+            print(f"        ❌ Error parseando JSON de DeepSeek: {e}")
+            print(f"        📄 Respuesta completa: {response}")
+            self.logger.error(f"Error parseando JSON de DeepSeek: {e}. Respuesta: {response}")
+            
         except Exception as e:
+            print(f"        ❌ Error en DeepSeek: {e}")
             self.logger.error(f"Error seleccionando lugares: {e}")
-            
-            # Fallback: seleccionar por rating
-            lugares_ordenados = sorted(
-                lugares_candidatos,
-                key=lambda x: (x.get('rating', 0), x.get('total_ratings', 0)),
-                reverse=True
-            )
-            
-            return lugares_ordenados[:max_lugares]
+        
+        # Fallback: seleccionar por rating
+        print(f"        🔄 Usando selección por rating como fallback")
+        lugares_ordenados = sorted(
+            lugares_candidatos,
+            key=lambda x: (x.get('rating', 0), x.get('total_ratings', 0)),
+            reverse=True
+        )
+        
+        return lugares_ordenados[:max_lugares]
     
     def optimizar_distribucion_dia(
         self,
@@ -243,13 +311,17 @@ class ItinerarioDeepSeek:
         actividades_info = []
         for i, actividad in enumerate(actividades_propuestas):
             lugar = actividad.get('lugar', {})
+            horarios = lugar.get('horarios', 'No especificado')
+            if not horarios or horarios == 'No especificado':
+                horarios = 'Abierto 24 horas'
+            
             actividad_info = f"""
-            ACTIVIDAD {i+1}:
+            ACTIVIDAD {i+1} (ID: {actividad.get('id', 'N/A')}):
             - Tipo: {actividad.get('tipo_actividad', 'N/A')}
-            - Lugar: {lugar.get('nombre', 'N/A')}
+            - Lugar: {lugar.get('nombre', 'N/A')} (ID: {lugar.get('id', 'N/A')})
             - Rating: {lugar.get('rating', 0)}/5
             - Nivel de precio: {lugar.get('nivel_precios', 'N/A')}
-            - Horarios: {lugar.get('horarios', 'N/A')}
+            - Horarios: {horarios}
             """
             actividades_info.append(actividad_info)
         
@@ -262,26 +334,34 @@ class ItinerarioDeepSeek:
         ACTIVIDADES A DISTRIBUIR:
         {chr(10).join(actividades_info)}
 
-        REGLAS DE DISTRIBUCIÓN:
-        1. DESAYUNO: Entre 7:00-9:00 (café/restaurante)
-        2. ACTIVIDADES MAÑANA: 9:00-12:00 (visitas turísticas)
-        3. ALMUERZO: 12:00-14:00 (restaurante)
-        4. ACTIVIDADES TARDE: 14:00-18:00 (visitas, compras)
-        5. CENA: 18:00-20:00 (restaurante)
-        6. ACTIVIDADES NOCTURNAS: 20:00-23:00 (bar, entretenimiento)
+        REGLAS ESTRICTAS DE DISTRIBUCIÓN:
+        1. NO HAY SUPERPOSICIÓN: Las actividades NO pueden solaparse en tiempo
+        2. RESPETAR HORARIOS: Considerar los horarios de cada lugar
+        3. Si un lugar no tiene horarios especificados, asumir que está abierto 24 horas
+        4. DESAYUNO: 7:30-8:30 o 8:00-9:00 (60 min máximo)
+        5. ACTIVIDADES MAÑANA: 9:00-12:00 (visitas turísticas, máximo 2 horas por actividad)
+        6. ALMUERZO: 12:30-13:30 (60 min máximo)
+        7. ACTIVIDADES TARDE: 14:00-18:00 (visitas, compras, máximo 2 horas por actividad)
+        8. CENA: 19:00-20:00 (60 min máximo)
+        9. ACTIVIDADES NOCTURNAS: 20:30-22:00 (bar, entretenimiento, máximo 90 min)
 
-        CONSIDERACIONES:
-        - Respetar horarios de operación de los lugares
-        - Dejar tiempo para traslados entre lugares
-        - No sobrecargar el día
-        - Considerar ritmo del usuario según preferencias
-        - Para restaurantes, variar horarios de comida
+        CONSIDERACIONES IMPORTANTES:
+        - Cada actividad debe tener un horario único y NO superpuesto
+        - Para restaurantes: máximo 1 hora por comida (desayuno, almuerzo, cena)
+        - Para visitas turísticas: máximo 2 horas por lugar
+        - Para compras: máximo 1 hora
+        - Para bares: máximo 90 minutos
+        - Dejar al menos 30 minutos entre actividades para traslados
+        - No repetir el mismo lugar en el mismo día
+        - Considerar los horarios de operación de cada lugar
+
+        IMPORTANTE: Usa el ID numérico exacto de la actividad (no "ACTIVIDAD_X")
 
         RESPONDE EN FORMATO JSON:
         {{
             "actividades_optimizadas": [
                 {{
-                    "id": ID_DE_LA_ACTIVIDAD,
+                    "id": ID_NUMERICO_DE_LA_ACTIVIDAD,
                     "hora_inicio": "HH:MM",
                     "hora_fin": "HH:MM",
                     "duracion_minutos": MINUTOS,
@@ -290,21 +370,31 @@ class ItinerarioDeepSeek:
             ]
         }}
 
-        HORARIOS SUGERIDOS:
+        EJEMPLO DE DISTRIBUCIÓN CORRECTA (SIN SUPERPOSICIÓN):
         - Desayuno: 7:30-8:30 (60 min)
-        - Visita mañana: 9:00-11:00 (120 min)
+        - Visita turística: 9:00-11:00 (120 min)
         - Almuerzo: 12:30-13:30 (60 min)
-        - Visita tarde: 14:00-16:00 (120 min)
+        - Visita turística: 14:00-16:00 (120 min)
         - Compras: 16:30-17:30 (60 min)
         - Cena: 19:00-20:00 (60 min)
         - Bar: 20:30-22:00 (90 min)
+
+        Asegúrate de que NO HAYA SUPERPOSICIÓN de horarios y respeta los horarios de cada lugar.
         """
         
         try:
+            print(f"        🤖 Enviando prompt a DeepSeek para optimizar distribución...")
             response = self.client.generate_response(prompt)
             
+            # Validar respuesta
+            if not response:
+                print(f"        ❌ DeepSeek devolvió respuesta vacía")
+                raise ValueError("Respuesta vacía de DeepSeek")
+            
+            print(f"        📄 Respuesta recibida de DeepSeek (primeros 100 chars): {response[:100]}...")
+            
             # Parsear respuesta JSON
-            resultado = json.loads(response)
+            resultado = json.loads(self._limpiar_respuesta_json(response))
             
             actividades_optimizadas = resultado.get('actividades_optimizadas', [])
             
@@ -333,30 +423,37 @@ class ItinerarioDeepSeek:
             self.logger.info(f"Optimizadas {len(actividades_optimizadas)} actividades")
             return actividades_optimizadas
             
+        except json.JSONDecodeError as e:
+            print(f"        ❌ Error parseando JSON de DeepSeek: {e}")
+            print(f"        📄 Respuesta completa: {response}")
+            self.logger.error(f"Error parseando JSON de DeepSeek: {e}. Respuesta: {response}")
+            
         except Exception as e:
+            print(f"        ❌ Error en DeepSeek: {e}")
             self.logger.error(f"Error optimizando distribución: {e}")
-            
-            # Fallback: distribución básica
-            horarios_base = [
-                ('07:30', '08:30', 60),   # Desayuno
-                ('09:00', '11:00', 120),  # Visita mañana
-                ('12:30', '13:30', 60),   # Almuerzo
-                ('14:00', '16:00', 120),  # Visita tarde
-                ('16:30', '17:30', 60),   # Compras
-                ('19:00', '20:00', 60),   # Cena
-                ('20:30', '22:00', 90),   # Bar
-            ]
-            
-            actividades_optimizadas = []
-            for i, actividad in enumerate(actividades_propuestas):
-                if i < len(horarios_base):
-                    hora_inicio, hora_fin, duracion = horarios_base[i]
-                    actividades_optimizadas.append({
-                        'id': actividad.get('id'),
-                        'hora_inicio': hora_inicio,
-                        'hora_fin': hora_fin,
-                        'duracion_minutos': duracion,
-                        'descripcion': f"Actividad {actividad.get('tipo_actividad', 'general')}"
-                    })
-            
-            return actividades_optimizadas 
+        
+        # Fallback: distribución básica
+        print(f"        🔄 Usando distribución básica como fallback")
+        horarios_base = [
+            ('07:30', '08:30', 60),   # Desayuno
+            ('09:00', '11:00', 120),  # Visita mañana
+            ('12:30', '13:30', 60),   # Almuerzo
+            ('14:00', '16:00', 120),  # Visita tarde
+            ('16:30', '17:30', 60),   # Compras
+            ('19:00', '20:00', 60),   # Cena
+            ('20:30', '22:00', 90),   # Bar
+        ]
+        
+        actividades_optimizadas = []
+        for i, actividad in enumerate(actividades_propuestas):
+            if i < len(horarios_base):
+                hora_inicio, hora_fin, duracion = horarios_base[i]
+                actividades_optimizadas.append({
+                    'id': actividad.get('id'),
+                    'hora_inicio': hora_inicio,
+                    'hora_fin': hora_fin,
+                    'duracion_minutos': duracion,
+                    'descripcion': f"Actividad {actividad.get('tipo_actividad', 'general')}"
+                })
+        
+        return actividades_optimizadas 
